@@ -1,0 +1,61 @@
+# 非敏感配置：可以提交到仓库。
+# 数据库用户名 / 密码、Redis 密码与 JWT 密钥统一放在 service/.env（参考 .env.example）。
+
+app:
+  env: dev
+
+server:
+  addr: ":8888"
+
+mysql:
+  host: "127.0.0.1"
+  port: 3306
+  database: "xqyun"
+  charset: "utf8mb4"
+  parse_time: true
+  loc: "Local"
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: "1h"
+  log_level: 2 # 1: silent, 2: error, 3: warn, 4: info
+
+redis:
+  # 登录会话（刷新令牌）存储在 Redis 中，必须启用；关闭后服务启动会失败。
+  enabled: true
+  host: "127.0.0.1"
+  port: 6379
+  db: 0
+  pool_size: 10
+
+jwt:
+  issuer: "xiaoque-auth"
+  cookie:
+    name: "xqyun_admin_refresh"
+    path: "/api/v1/admin"
+    domain: ""
+    # 生产环境必须为 true（HTTPS）；本地 HTTP 开发使用 false
+    secure: false
+    same_site: "Lax"
+  clients:
+    admin:
+      audience: "admin-api"
+      token_type: "admin"
+      access_ttl: "15m"
+      refresh_ttl: "168h"
+    frontend:
+      audience: "frontend-api"
+      token_type: "frontend"
+      access_ttl: "30m"
+      refresh_ttl: "720h"
+
+log:
+  level: "info"
+  # 开发环境（APP_ENV != production）输出到控制台；生产环境写入 logs/app.log。
+  dir: "logs"
+  filename: "app.log"
+  max_size_mb: 100
+  max_backups: 30
+  max_age_days: 30
+  compress: true
+  # 仅开发环境终端生效；生产文件日志不带颜色
+  color: true

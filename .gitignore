@@ -1,3 +1,50 @@
-_backup/
+# 依赖
 node_modules/
+
+# 构建产物 / 缓存（Nuxt、Vite、后台预览）
+.nuxt
+.output
+dist
+dist-share
+share-output
+.vite
+.cache
+coverage
+*.tsbuildinfo
+
+# 日志
+logs/
+*.log
+nohup.out
+
+# 本地环境变量与密钥（保留示例文件）
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# 备份 / 归档
+_backup/
+_archive/
+
+# 编辑器、系统与本地临时文件
 .idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+cloudflared.txt
+
+# Go 编译产物
+*.exe
+*.exe~
+*.o
+*.a
+*.so
+*.test
+*.prof
+
+# 本地数据
+dump.rdb
+dumped_hertz_remote_config.json

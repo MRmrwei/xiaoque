@@ -1,0 +1,48 @@
+html,
+body,
+#preview-app {
+  min-height: 100%;
+}
+
+body {
+  background: var(--paper);
+}
+
+#preview-app,
+.preview-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-page {
+  flex: 1;
+  background: var(--paper);
+}
+
+.preview-empty {
+  padding: 90px 24px;
+  text-align: center;
+  color: var(--muted-2);
+  font-size: 14px;
+}
+
+.preview-loading {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted-2);
+}
+
+.preview-loading .mono {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+.preview-loading p {
+  font-size: 13px;
+}

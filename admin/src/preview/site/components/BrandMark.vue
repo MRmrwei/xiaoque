@@ -1,0 +1,56 @@
+<template>
+  <img
+    v-if="image"
+    :src="image"
+    :width="size"
+    :height="size"
+    class="brand-image"
+    alt=""
+  />
+  <svg
+    v-else
+    :width="size"
+    :height="size"
+    viewBox="0 0 40 40"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <rect width="40" height="40" rx="12" :fill="inverse ? '#F6F2EA' : '#141518'" />
+    <path
+      d="M11.2 26.8c-1.9-1.2-2.8-3.1-2.4-5.4.3-1.9 1.4-3.6 3-4.7 1.8-1.3 4-1.8 6.2-1.3 1.9.4 3.4 1.6 4.3 3.2.8 1.4 1 3.1.5 4.8-.6 2.1-2.2 3.7-4.3 4.4-2.4.8-5 .6-7.3-.6Z"
+      :fill="inverse ? '#141518' : '#F6F2EA'"
+    />
+    <circle cx="25.7" cy="15.3" r="5.1" :fill="inverse ? '#141518' : '#F6F2EA'" />
+    <path d="M30.5 14.2 36 16l-5.2 2.3.6-2.1-.9-2Z" fill="#E8503A" />
+    <path
+      d="M12.3 25.6c1.4-4 5-6.6 9.3-6.6 2.6 0 4.8 1 6.4 2.7-3.3-1-6.8 0-9.1 2.5-.9 1-1.5 2.3-1.7 3.6-2.2-.1-4-.9-4.9-2.2Z"
+      fill="#E8503A"
+    />
+    <path
+      d="M11.6 25.8 5.2 33.2l1.5-8.5c1.4.8 3.1 1.2 4.9 1.1Z"
+      :fill="inverse ? '#141518' : '#F6F2EA'"
+    />
+    <circle cx="27.2" cy="14.3" r="1.05" :fill="inverse ? '#F6F2EA' : '#141518'" />
+  </svg>
+</template>
+
+<script setup lang="ts">
+withDefaults(
+  defineProps<{
+    size?: number | string
+    inverse?: boolean
+    /** 上传的官网 Logo；为空时使用内置品牌图标。 */
+    image?: string
+  }>(),
+  { size: 32, inverse: false, image: '' }
+)
+</script>
+
+<style scoped>
+.brand-image {
+  display: block;
+  object-fit: contain;
+  border-radius: 10px;
+}
+</style>

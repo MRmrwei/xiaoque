@@ -1,0 +1,260 @@
+openapi: 3.0.3
+info:
+  title: 小鹊云管理后台认证 API
+  version: 1.0.0
+  description: |
+    管理后台登录会话相关接口：刷新 Access Token、退出登录。
+
+    ## 通用约定
+    - 所有响应的 HTTP 状态码固定为 `200`，成功与失败由响应体的 `code` 判断：`0` 成功、`40000` 参数错误、`40100` 未登录 / 令牌无效、`40300` 无权限、`40400` 不存在、`50000` 服务端错误。
+    - Refresh Token **不出现在请求体或响应体中**，只通过 HttpOnly Cookie `xqyun_admin_refresh` 在浏览器与服务端之间传递，前端 JS 无法读取。
+    - 刷新采用轮换机制：每次刷新成功后旧刷新令牌立即失效，服务端通过 `Set-Cookie` 下发新令牌；旧令牌再次使用会被判定为失效。
+    - 刷新与退出接口都不需要 `Authorization: Bearer`。Access Token 过期后正是依靠刷新令牌续期；退出时会话可能已经没有有效的 Access Token。
+    - Cookie 属性由服务端配置：默认 `Path=/api/v1/admin`、`SameSite=Lax`、`HttpOnly`；生产环境 HTTPS 下 `Secure=true`，本地 HTTP 开发为 `false`。
+servers:
+  - url: http://127.0.0.1:8888
+    description: 本地开发
+tags:
+  - name: 管理后台-认证
+    description: 管理后台登录会话的刷新与退出
+
+paths:
+  /api/v1/admin/auth/refresh:
+    post:
+      tags:
+        - 管理后台-认证
+      summary: 刷新 Access Token
+      operationId: refreshAdminAccessToken
+      description: |
+        从 HttpOnly Cookie 读取刷新令牌并校验：令牌必须存在、未过期、未吊销，且对应账号存在并处于启用状态。
+
+        校验通过后：
+        1. 在同一事务中吊销旧刷新令牌、写入新刷新令牌；
+        2. 签发新的 Access Token；
+        3. 通过 `Set-Cookie` 下发新的刷新令牌；
+        4. 在响应体 `data` 中返回新的 Access Token、有效期与账号信息。
+
+        ## 业务错误
+        | code | 场景 | 是否清除 Cookie |
+        | --- | --- | --- |
+        | `0` | 刷新成功 | 否，写入新 Cookie |
+        | `40100` | Cookie 缺失、令牌不存在 / 已过期 / 已吊销 / 旧令牌重放 | 是 |
+        | `40300` | 账号已被禁用 | 是 |
+        | `50000` | 数据库等临时故障 | 否，保留 Cookie 便于重试 |
+
+        并发使用同一个刷新令牌时只有一个请求能成功，其余请求返回 `40100`。
+      security:
+        - adminRefreshCookie: []
+      responses:
+        '200':
+          description: 业务响应。HTTP 状态固定为 200，按响应体 `code` 判断结果。
+          headers:
+            Set-Cookie:
+              description: |
+                刷新成功时写入新的 `xqyun_admin_refresh`（HttpOnly）；
+                `code` 为 `40100` / `40300` 时写入过期 Cookie（`Max-Age=0`）清除登录状态。
+              schema:
+                type: string
+              example: xqyun_admin_refresh=newToken; Path=/api/v1/admin; Max-Age=604800; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+              examples:
+                success:
+                  summary: 刷新成功
+                  value:
+                    code: 0
+                    message: ok
+                    data:
+                      access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidXNlcm5hbWUiOiJhZG1pbiIsImlzcyI6InhpYW9xdWUtYXV0aCIsImF1ZCI6ImFkbWluLWFwaSIsInRva2VuX3R5cGUiOiJhZG1pbiIsImlhdCI6MTc5MjU2NzAyOSwiZXhwIjoxNzkyNTY3OTI5fQ.signature
+                      expires_in: 900
+                      user:
+                        id: '1'
+                        username: admin
+                        name: 小阙
+                        email: ''
+                        mobile: ''
+                        avatar: ''
+                        roles: []
+                        permissions: []
+                sessionExpired:
+                  summary: 刷新令牌缺失 / 无效 / 过期 / 已吊销
+                  value:
+                    code: 40100
+                    message: 登录状态已失效，请重新登录
+                accountDisabled:
+                  summary: 账号已被禁用
+                  value:
+                    code: 40300
+                    message: 账号已被禁用
+                serverError:
+                  summary: 服务端临时故障
+                  value:
+                    code: 50000
+                    message: 刷新登录状态失败，请稍后重试
+
+  /api/v1/admin/auth/logout:
+    post:
+      tags:
+        - 管理后台-认证
+      summary: 退出登录
+      operationId: logoutAdmin
+      description: |
+        从 HttpOnly Cookie 读取刷新令牌并按哈希吊销当前会话，然后清除 Cookie。
+
+        该接口是幂等的：
+        - 未携带 Cookie、令牌不存在或已被吊销时，同样返回 `code: 0`；
+        - 重复调用不会报错。
+
+        吊销后该刷新令牌不能再用于刷新；已经签发且未过期的 Access Token 在自然过期前仍可能通过 Bearer 校验，若需要立即失效所有凭证，应同时在服务端引入 Access Token 黑名单或缩短有效期。
+
+        ## 业务错误
+        | code | 场景 | 是否清除 Cookie |
+        | --- | --- | --- |
+        | `0` | 退出成功，或本来就没有有效刷新令牌 | 是 |
+        | `50000` | 数据库等临时故障，吊销未完成 | 否，客户端可重试 |
+      security:
+        - adminRefreshCookie: []
+      responses:
+        '200':
+          description: 业务响应。HTTP 状态固定为 200，按响应体 `code` 判断结果。
+          headers:
+            Set-Cookie:
+              description: 退出成功时写入过期 Cookie（`Max-Age=0`）清除 `xqyun_admin_refresh`。
+              schema:
+                type: string
+              example: xqyun_admin_refresh=; Path=/api/v1/admin; Max-Age=0; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+              examples:
+                success:
+                  summary: 退出成功（未携带 Cookie 时同样返回）
+                  value:
+                    code: 0
+                    message: ok
+                serverError:
+                  summary: 服务端临时故障
+                  value:
+                    code: 50000
+                    message: 退出登录失败，请稍后重试
+
+components:
+  securitySchemes:
+    adminRefreshCookie:
+      type: apiKey
+      in: cookie
+      name: xqyun_admin_refresh
+      description: |
+        登录或刷新成功时由服务端写入的 HttpOnly 刷新令牌 Cookie。
+        浏览器会自动携带，前端脚本无法读取；使用 Swagger UI 等工具调试时，可手工在请求 Cookie 中添加该字段。
+
+  schemas:
+    RefreshResponse:
+      type: object
+      description: 刷新令牌响应。`code = 0` 时 `data` 必填，其余情况只有 `code` 与 `message`。
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: 业务码，`0` 表示成功
+          enum:
+            - 0
+            - 40100
+            - 40300
+            - 50000
+          example: 0
+        message:
+          type: string
+          example: ok
+        data:
+          $ref: '#/components/schemas/AdminSession'
+
+    AdminSession:
+      type: object
+      description: 刷新成功后的令牌与账号信息，结构与登录接口的 `data` 一致。
+      required:
+        - access_token
+        - expires_in
+        - user
+      properties:
+        access_token:
+          type: string
+          description: 'HS256 JWT；后续请求放在 `Authorization: Bearer <access_token>` 中。'
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.signature
+        expires_in:
+          type: integer
+          description: Access Token 有效期（秒）
+          example: 900
+        user:
+          $ref: '#/components/schemas/AdminUser'
+
+    AdminUser:
+      type: object
+      description: 管理后台账号信息。
+      required:
+        - id
+        - username
+        - name
+        - email
+        - mobile
+        - avatar
+        - roles
+        - permissions
+      properties:
+        id:
+          type: string
+          description: 用户 ID，JSON 中统一使用字符串
+          example: '1'
+        username:
+          type: string
+          example: admin
+        name:
+          type: string
+          example: 小阙
+        email:
+          type: string
+          description: 未设置时为空字符串
+          example: ''
+        mobile:
+          type: string
+          description: 未设置时为空字符串
+          example: ''
+        avatar:
+          type: string
+          description: 头像地址或 data URL，未设置时为空字符串
+          example: ''
+        roles:
+          type: array
+          description: 角色列表，当前版本为空数组
+          items:
+            type: string
+          example: []
+        permissions:
+          type: array
+          description: 权限列表，当前版本为空数组
+          items:
+            type: string
+          example: []
+
+    LogoutResponse:
+      type: object
+      description: 退出登录响应，成功时不返回 `data`。
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: 业务码，`0` 表示成功
+          enum:
+            - 0
+            - 50000
+          example: 0
+        message:
+          type: string
+          example: ok

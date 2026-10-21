@@ -214,6 +214,94 @@ async function retryAfterRefresh(retried: boolean): Promise<boolean> {
   }
 }
 
+export interface ApiDownloadResult {
+  blob: Blob
+  filename: string
+}
+
+/**
+ * 下载后端文件（当前用于留言 CSV 导出）。
+ * 与 JSON 请求共用 Bearer、Cookie 与静默刷新逻辑，返回文件 Blob 和文件名。
+ */
+export async function apiDownload(
+  path: string,
+  options: { query?: QueryParams; timeoutMs?: number } = {}
+): Promise<ApiDownloadResult> {
+  return performDownload(path, options, false)
+}
+
+async function performDownload(
+  path: string,
+  options: { query?: QueryParams; timeoutMs?: number },
+  retried: boolean
+): Promise<ApiDownloadResult> {
+  const { query, timeoutMs = 30_000 } = options
+  const headers = new Headers()
+  headers.set('Accept', 'text/csv, application/json')
+
+  const token = authProvider?.getAccessToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = window.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${buildPath(path, query)}`, {
+      headers,
+      credentials: 'include',
+      signal: controller.signal
+    })
+  } catch (error) {
+    if (timedOut) {
+      throw new ApiError(0, '导出超时，请稍后重试')
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError(0, '导出已取消')
+    }
+    throw new ApiError(0, '无法连接服务器，请确认 Go 后端已启动')
+  } finally {
+    window.clearTimeout(timer)
+  }
+
+  const contentType = response.headers.get('Content-Type') || ''
+  if (!contentType.includes('text/csv')) {
+    const payload = (await response.json().catch(() => null)) as ApiEnvelope<unknown> | null
+    if (response.status === 401 || (payload && UNAUTHORIZED_CODES.has(payload.code))) {
+      if (!retried && (await retryAfterRefresh(retried))) {
+        return performDownload(path, options, true)
+      }
+      authProvider?.onUnauthorized()
+    }
+    if (payload && typeof payload.code === 'number') {
+      throw new ApiError(payload.code, payload.message || '导出失败，请稍后重试')
+    }
+    throw new ApiError(response.status, '导出失败，请稍后重试')
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: filenameFromDisposition(response.headers.get('Content-Disposition'))
+  }
+}
+
+function filenameFromDisposition(header: string | null): string {
+  if (!header) return 'submissions.csv'
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(header)
+  if (!match) return 'submissions.csv'
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return match[1]
+  }
+}
+
 type RequestOptions = Omit<ApiRequestOptions, 'method' | 'body'>
 
 /** 常用方法快捷封装。 */

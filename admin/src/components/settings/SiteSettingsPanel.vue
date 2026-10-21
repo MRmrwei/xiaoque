@@ -237,7 +237,7 @@
 
         <div class="site-preview-note">
           <span class="mono">LIVE</span>
-          <p>修改 Logo、主色与背景色会立即反映在预览中；点击「保存设置」后写入本地演示数据。</p>
+          <p>修改 Logo、主色与背景色会立即反映在预览中；点击「保存设置」后写入 Go 后端。</p>
         </div>
       </aside>
     </div>
@@ -346,11 +346,16 @@ async function onLogoPick(event: Event) {
   }
 }
 
-function saveSite() {
+async function saveSite() {
   saveState.value = 'saving'
-  pagesStore.saveSettings()
-  saveState.value = 'saved'
-  ElMessage.success('站点配置已保存')
+  try {
+    await pagesStore.saveSettings()
+    saveState.value = 'saved'
+    ElMessage.success('站点配置已保存')
+  } catch (error) {
+    saveState.value = 'dirty'
+    ElMessage.error(error instanceof Error ? error.message : '保存失败，请稍后重试')
+  }
 }
 
 async function resetSite() {

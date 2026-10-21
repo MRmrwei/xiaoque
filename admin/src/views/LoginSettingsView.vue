@@ -38,33 +38,36 @@
 
           <p class="settings-label">登录页展示区</p>
 
-          <div class="logo-setting">
-            <span class="logo-preview">
-              <img v-if="form.logo" :src="form.logo" alt="Logo 预览" />
-              <BrandMark v-else :size="48" />
+          <div class="background-setting">
+            <span class="background-preview" :style="brandPreviewStyle">
+              <span v-if="!form.backgroundImage" class="background-fallback">默认黑色底</span>
             </span>
-            <div class="logo-actions">
-              <div class="logo-buttons">
-                <el-button size="small" :loading="logoLoading" @click="pickLogo">
-                  {{ form.logo ? '更换 Logo' : '上传 Logo' }}
+            <div class="background-actions">
+              <div class="background-buttons">
+                <el-button size="small" :loading="backgroundLoading" @click="pickBackground">
+                  {{ form.backgroundImage ? '更换底图' : '上传底图' }}
                 </el-button>
-                <el-button v-if="form.logo" size="small" @click="form.logo = ''">
-                  使用内置图标
+                <el-button
+                  v-if="form.backgroundImage"
+                  size="small"
+                  @click="form.backgroundImage = ''"
+                >
+                  使用黑色底
                 </el-button>
               </div>
-              <span class="logo-hint">{{ logoHint }}</span>
+              <span class="background-hint">{{ backgroundHint }}</span>
             </div>
             <input
-              ref="logoInput"
-              class="logo-input"
+              ref="backgroundInput"
+              class="background-input"
               type="file"
               accept="image/*"
-              @change="onLogoPick"
+              @change="onBackgroundPick"
             />
           </div>
 
           <label class="setting-field">
-            <span>Logo 名称</span>
+            <span>品牌名称</span>
             <el-input
               v-model="form.brandName"
               maxlength="20"
@@ -121,10 +124,8 @@
       <aside class="settings-preview">
         <p class="preview-label">登录页预览</p>
 
-        <div class="preview-brand">
+        <div class="preview-brand" :style="brandPreviewStyle">
           <div class="preview-brand-head">
-            <img v-if="form.logo" :src="form.logo" alt="" class="preview-logo" />
-            <BrandMark v-else :size="30" inverse />
             <span>
               {{ form.brandName || '小鹊云' }}
               <em>{{ form.brandSubName || 'SITE STUDIO' }}</em>
@@ -160,10 +161,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import BrandMark from '~/components/BrandMark.vue'
 import { usePagesStore } from '@/stores/pages'
 import { seedLoginSettings } from '@/data/seed/seed'
 import type { LoginSettings } from '@/types/admin'
+import { loginBrandBackground } from '@/utils/loginBackground'
 import {
   estimateDataUrlBytes,
   fileToImageDataUrl,
@@ -173,31 +174,34 @@ import {
 const pagesStore = usePagesStore()
 const form = reactive<LoginSettings>({ ...pagesStore.loginSettings })
 
-const logoInput = ref<HTMLInputElement | null>(null)
-const logoLoading = ref(false)
-const logoHint = computed(() => {
-  if (!form.logo) return 'PNG / SVG / WebP，会自动压缩到 1600px 以内'
-  return `当前 ${formatBytes(estimateDataUrlBytes(form.logo))}`
+const backgroundInput = ref<HTMLInputElement | null>(null)
+const backgroundLoading = ref(false)
+const brandPreviewStyle = computed(() => loginBrandBackground(form.backgroundImage))
+const backgroundHint = computed(() => {
+  if (!form.backgroundImage) return '未设置时使用黑色底，建议上传横向图片'
+  return `当前 ${formatBytes(estimateDataUrlBytes(form.backgroundImage))}`
 })
 
-function pickLogo(): void {
-  logoInput.value?.click()
+function pickBackground(): void {
+  backgroundInput.value?.click()
 }
 
-async function onLogoPick(event: Event): Promise<void> {
+async function onBackgroundPick(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
 
-  logoLoading.value = true
+  backgroundLoading.value = true
   try {
-    form.logo = await fileToImageDataUrl(file)
-    ElMessage.success(`Logo 已更新（${formatBytes(estimateDataUrlBytes(form.logo))}）`)
+    form.backgroundImage = await fileToImageDataUrl(file)
+    ElMessage.success(
+      `底图已更新（${formatBytes(estimateDataUrlBytes(form.backgroundImage))}）`
+    )
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '图片处理失败')
   } finally {
-    logoLoading.value = false
+    backgroundLoading.value = false
   }
 }
 
@@ -287,50 +291,50 @@ function restoreDefaults(): void {
   color: var(--adm-muted-2);
 }
 
-.logo-setting {
+.background-setting {
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
-.logo-preview {
-  width: 58px;
-  height: 58px;
+.background-preview {
+  width: 96px;
+  height: 60px;
   flex: none;
   display: grid;
   place-items: center;
   border: 1px solid var(--adm-line);
-  border-radius: 11px;
-  background: #faf8f4;
+  border-radius: 10px;
+  background: #141518;
+  background-size: cover;
+  background-position: center;
   overflow: hidden;
 }
 
-.logo-preview img {
-  width: 100%;
-  height: 100%;
-  padding: 6px;
-  object-fit: contain;
+.background-fallback {
+  font-size: 11px;
+  color: rgba(246, 242, 234, 0.55);
 }
 
-.logo-actions {
+.background-actions {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.logo-buttons {
+.background-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.logo-hint {
-  font-size: 10.5px;
+.background-hint {
+  font-size: 11px;
   color: var(--adm-muted-2);
 }
 
-.logo-input {
+.background-input {
   display: none;
 }
 
@@ -405,16 +409,6 @@ function restoreDefaults(): void {
   display: flex;
   align-items: center;
   gap: 9px;
-}
-
-.preview-logo {
-  width: 30px;
-  height: 30px;
-  flex: none;
-  padding: 3px;
-  border-radius: 8px;
-  background: #f6f2ea;
-  object-fit: contain;
 }
 
 .preview-brand-head span {

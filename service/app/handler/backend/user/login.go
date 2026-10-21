@@ -1,5 +1,5 @@
-// Package backend 提供管理后台的 HTTP 控制器（登录、刷新令牌、退出登录等）。
-package backend
+// Package user 提供管理后台用户认证相关的 HTTP 控制器（登录、刷新令牌、退出登录）。
+package user
 
 import (
 	"context"

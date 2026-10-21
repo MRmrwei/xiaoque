@@ -122,9 +122,10 @@ type PageDraft struct {
     Path      string      `json:"path"`
     Name      string      `json:"name"`
     Status    string      `json:"status"`
+    Version   int         `json:"version"`
     SEO       SEO         `json:"seo"`
     Blocks    []PageBlock `json:"blocks"`
-    UpdatedAt int64      `json:"updated_at"`
+    UpdatedAt int64       `json:"updated_at"`
 }
 
 // 对外发布的只读页面
@@ -742,6 +743,29 @@ type AdminUser struct {
 | GET | `/api/v1/admin/settings` | 站点设置 | `setting:edit` |
 | PUT | `/api/v1/admin/settings` | 保存站点设置 | `setting:edit` |
 
+菜单保存请求体：
+
+```json
+{
+  "name": "顶部导航",
+  "items": [
+    {
+      "label": { "zh-CN": "首页", "en": "Home" },
+      "path": "/",
+      "link_type": "page",
+      "target": "_self",
+      "visible": true,
+      "children": []
+    }
+  ]
+}
+```
+
+- `items` 的数组顺序即展示顺序，`sort` 可省略。
+- 后台菜单项用 `label` 同时保存中英文文案；前台 `site/nav` 按 `locale` 取对应语言。
+- 顶部菜单只有一级；页脚顶级项是栏目，`children` 是栏目内链接，最多两级。
+- 菜单容器（`header` / `footer` / `footer_bottom`）不存在时保存会自动创建。
+
 站点设置请求体：
 
 ```json
@@ -770,7 +794,8 @@ type AdminUser struct {
 说明：
 
 - 站点设置按 `key + locale` 存储，中文 / 英文可分别提交。
-- 全局项（Logo、颜色、收录开关）不区分语言。
+- 管理后台的站点配置 key（`site_name` / `company_name` / `tagline` / `contact` / `brand` / `header` / `footer` / `copyright` / `icp` / `socials` / `default_locale` / `allow_index` / `seo`）作为全局项保存，值本身可携带中英文文案；其余 key 按 `locale` 保存。
+- `GET /api/v1/admin/settings?locale=zh-CN` 返回与请求体相同的扁平结构，并附带 `locale`；全局项与语言级设置合并返回。
 - 保存后发布缓存失效。
 
 ### 4.6 表单留言
@@ -781,6 +806,60 @@ type AdminUser struct {
 | GET | `/api/v1/admin/submissions/:id` | 留言详情 | `form:read` |
 | PUT | `/api/v1/admin/submissions/:id/status` | 标记处理状态 | `form:edit` |
 | GET | `/api/v1/admin/submissions/export` | 导出 CSV | `form:read` |
+
+列表查询参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `status` | string | `new` / `processing` / `done` / `spam` |
+| `form_key` | string | 表单标识，如 `contact` |
+| `locale` | string | `zh-CN` / `en` |
+| `keyword` | string | 匹配姓名 / 邮箱 / 电话 / 公司 / 留言 |
+| `created_from` / `created_to` | int64 | 提交时间范围（Unix 秒） |
+| `page` / `page_size` | int | 分页，`page_size` 最大 100 |
+
+列表响应 `data`：
+
+```json
+{
+  "items": [
+    {
+      "id": "1",
+      "form_key": "contact",
+      "locale": "zh-CN",
+      "name": "张三",
+      "email": "zhangsan@example.com",
+      "phone": "13800000000",
+      "company": "某某公司",
+      "message": "想了解产品",
+      "data": {},
+      "status": "new",
+      "ip": "203.0.113.10",
+      "user_agent": "Mozilla/5.0 ...",
+      "created_at": 1792375200,
+      "updated_at": 1792375200
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "stats": {
+    "total": 12,
+    "new": 5,
+    "processing": 3,
+    "done": 4,
+    "spam": 0
+  }
+}
+```
+
+说明：
+
+- `stats` 统计不受 `status` 影响，其余筛选条件生效，用于后台顶部统计卡片。
+- `name` / `email` / `phone` / `company` / `message` 从 `data` 提取的常用字段，完整内容以 `data` 为准。
+- 来源只记录语言（`zh-CN` / `en`），不记录具体来源页面。
+- 标记状态：`PUT /api/v1/admin/submissions/:id/status`，请求体 `{"status":"processing"}`，返回更新后的留言详情。
+- 导出：`text/csv; charset=utf-8`，带 UTF-8 BOM，`Content-Disposition: attachment`；筛选参数与列表一致，最多导出 10000 条。
 
 ### 4.7 账号、角色与审计
 

@@ -41,7 +41,8 @@ export interface AdminLoginResponse {
 /** 后台登录页与登录策略的本地设置。 */
 export interface LoginSettings {
   captchaEnabled: boolean
-  logo: string
+  /** 登录页品牌区底图，data URL 或远程地址；为空时使用黑色底。 */
+  backgroundImage: string
   brandName: string
   brandSubName: string
   brandKicker: string
@@ -53,9 +54,6 @@ export interface LoginSettings {
 export interface ContactSubmissionRecord {
   id: string
   formKey: string
-  pageId?: string
-  pageName: string
-  pagePath: string
   locale: import('~/domain/types').Locale
   name: string
   email: string
@@ -70,11 +68,11 @@ export interface ContactSubmissionRecord {
   updatedAt: string
 }
 
+/** 本地只持久化仍在演示阶段的登录页设置。 */
 export interface PersistedDemo {
   schemaVersion: 1
   savedAt: string
-  pages: PageRecord[]
-  submissions?: ContactSubmissionRecord[]
+  pages?: PageRecord[]
   loginSettings?: LoginSettings
   settings?: import('~/domain/types').SiteSettings
 }

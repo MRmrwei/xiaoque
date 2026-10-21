@@ -51,6 +51,9 @@
           </button>
         </div>
 
+        <el-button size="small" :loading="savingDraft" @click="saveDraft">
+          保存草稿
+        </el-button>
         <el-button size="small" @click="previewOpen = true">预览</el-button>
         <el-button
           v-if="currentStatus === 'published'"
@@ -154,6 +157,21 @@
     </el-dialog>
   </div>
 
+  <div v-else-if="pagesStore.loading" class="adm-page">
+    <el-result icon="info" title="正在加载页面" sub-title="正在从 Go 后端读取页面数据…" />
+  </div>
+
+  <div v-else-if="pagesStore.loadError" class="adm-page">
+    <el-result icon="error" title="页面加载失败" :sub-title="pagesStore.loadError">
+      <template #extra>
+        <el-button @click="router.push('/pages')">返回页面列表</el-button>
+        <el-button type="primary" :loading="pagesStore.loading" @click="reload">
+          重新加载
+        </el-button>
+      </template>
+    </el-result>
+  </div>
+
   <div v-else class="adm-page">
     <el-result
       icon="warning"
@@ -168,7 +186,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -225,6 +243,7 @@ const mode = ref<'block' | 'page'>('block')
 const libraryOpen = ref(false)
 const previewOpen = ref(false)
 const publishOpen = ref(false)
+const savingDraft = ref(false)
 
 const selectedBlock = computed<PageBlock | null>(() => {
   if (!page.value || !selectedId.value) return null
@@ -249,14 +268,39 @@ const propsTitle = computed(() => {
 // savePage 会更新 updatedAt，这个写入不应再被视为一次编辑。
 const autosave = useAutosave(
   () => page.value,
-  (target) => muteOnce(() => pagesStore.savePage(target)),
-  3000
+  (target) => muteWhile(() => pagesStore.savePage(target)),
+  3000,
+  (error) => {
+    ElMessage.error(error instanceof Error ? error.message : '自动保存失败，请稍后重试')
+  }
 )
 const saveState = autosave.state
 const saveLabel = autosave.label
 const history = useEditorHistory(page)
 const canUndo = history.canUndo
 const canRedo = history.canRedo
+
+/** 手动保存草稿，不发布；自动保存仍在停止编辑 3 秒后触发。 */
+async function saveDraft() {
+  if (!page.value || savingDraft.value) return
+  savingDraft.value = true
+  try {
+    const saved = await autosave.saveNow()
+    if (saved) ElMessage.success('草稿已保存')
+  } finally {
+    savingDraft.value = false
+  }
+}
+
+function handleSaveShortcut(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    void saveDraft()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', handleSaveShortcut))
+onBeforeUnmount(() => window.removeEventListener('keydown', handleSaveShortcut))
 
 let activePageId = ''
 let muteWatch = false
@@ -280,12 +324,22 @@ watch(
   { deep: true, immediate: true }
 )
 
-function muteOnce(action: () => void) {
+/** 保存 / 发布接口返回后会更新页面字段，期间暂停「有未保存修改」的监听。 */
+async function muteWhile(action: () => Promise<void>) {
   muteWatch = true
-  action()
-  void nextTick(() => {
+  try {
+    await action()
+  } finally {
+    await nextTick()
     muteWatch = false
-  })
+  }
+}
+
+async function reload() {
+  await pagesStore.reloadAll()
+  if (pagesStore.loadError) {
+    ElMessage.error(pagesStore.loadError)
+  }
 }
 
 function undo() {
@@ -384,14 +438,18 @@ function dotFor(locale: Locale): string {
   return pairStatus.value === 'published' ? 'success' : 'neutral'
 }
 
-function switchLocale(locale: Locale) {
+async function switchLocale(locale: Locale) {
   const current = page.value
   if (!current || current.locale === locale) return
-  autosave.flush()
+  await autosave.flush()
   const existing = pagesStore.pairOf(current)
-  const target = existing ?? pagesStore.createTranslation(current)
-  if (!existing) ElMessage.success('已创建翻译草稿，文本需要重新填写')
-  router.push({ name: 'page-editor', params: { id: target.id } })
+  try {
+    const target = existing ?? (await pagesStore.createTranslation(current))
+    if (!existing) ElMessage.success('已创建翻译草稿，文本需要重新填写')
+    await router.push({ name: 'page-editor', params: { id: target.id } })
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '创建翻译版本失败')
+  }
 }
 
 function switchToPairLocale() {
@@ -405,20 +463,22 @@ const { checks: publishChecks, ready: publishReady } = usePublishValidation(
   pair
 )
 
-function openPublish() {
-  autosave.saveNow()
+async function openPublish() {
+  await autosave.flush()
   publishOpen.value = true
 }
 
-function confirmPublish() {
+async function confirmPublish() {
   const current = page.value
   if (!current) return
-  autosave.saveNow()
-  muteOnce(() => {
-    pagesStore.publishPage(current)
-  })
-  publishOpen.value = false
-  ElMessage.success(`「${current.name}」已发布`)
+  await autosave.flush()
+  try {
+    await muteWhile(() => pagesStore.publishPage(current))
+    publishOpen.value = false
+    ElMessage.success(`「${current.name}」已发布`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '发布失败，请稍后重试')
+  }
 }
 
 async function unpublishCurrent() {
@@ -430,18 +490,21 @@ async function unpublishCurrent() {
       '下架页面',
       { type: 'warning', confirmButtonText: '确认下架', cancelButtonText: '取消' }
     )
-    muteOnce(() => {
-      pagesStore.unpublishPage(current)
-    })
-    ElMessage.success(`「${current.name}」已下架`)
   } catch {
-    // cancelled
+    return
+  }
+
+  try {
+    await muteWhile(() => pagesStore.unpublishPage(current))
+    ElMessage.success(`「${current.name}」已下架`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '下架失败，请稍后重试')
   }
 }
 
 /* 离开编辑器 */
-function goBack() {
-  autosave.flush()
-  router.push('/pages')
+async function goBack() {
+  await autosave.flush()
+  await router.push('/pages')
 }
 </script>

@@ -1,0 +1,861 @@
+openapi: 3.0.3
+info:
+  title: 小鹊云页面编排 API
+  version: 1.0.0
+  license:
+    name: Proprietary
+  description: |
+    小鹊云 Go 后端（CloudWeGo Hertz）页面编排接口文档，覆盖后台「站点编排」的页面内容、顶部导航、底部导航与站点配置。
+
+    通用约定：
+    - 所有响应 HTTP 状态码统一为 200，成功与失败通过响应体中的 `code` 判断：`0` 成功，`40000` 参数错误，`40100` 未登录 / 令牌无效，`40300` 无权限，`40400` 不存在，`40900` 资源冲突，`50000` 服务端错误。
+    - 时间字段统一为 Unix 时间戳（秒），JSON 中为 number。
+    - JSON 中 ID 统一为字符串，避免 JavaScript 大整数精度丢失。
+    - 本组接口需要 `Authorization: Bearer <access_token>`；登录、刷新令牌与退出登录见 `admin-auth-session.yaml`。
+
+    说明：`/api/v1/frontend/*` 前台渲染、导航与表单接口尚未实现，暂未收录。
+servers:
+  - url: http://127.0.0.1:8888
+    description: 本地开发
+tags:
+  - name: 页面内容
+    description: 站点编排 → 页面内容
+  - name: 导航菜单
+    description: 站点编排 → 顶部导航 / 底部导航 / 页脚底部链接
+  - name: 站点配置
+    description: 站点编排 → 站点配置
+
+paths:
+  /api/v1/admin/pages:
+    get:
+      tags: [页面内容]
+      operationId: listAdminPages
+      summary: 页面列表
+      description: |
+        按语言、状态、关键词分页查询页面，按更新时间倒序。
+        列表项同时返回同一翻译组下的其他语言版本，供「前往翻译版本」使用。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocaleQuery'
+        - name: status
+          in: query
+          required: false
+          description: 页面状态
+          schema:
+            type: string
+            enum: [draft, published]
+        - name: keyword
+          in: query
+          required: false
+          description: 关键词，匹配页面名称或路径
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: |
+            页面列表。`code = 0` 成功；`40000` 参数错误；`40100` 未登录；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPageListApiResponse'
+    post:
+      tags: [页面内容]
+      operationId: createAdminPage
+      summary: 新建页面
+      description: |
+        新建草稿页面。`copy_from_id` 非空时复制来源页面的区块结构并重新生成区块 ID。
+        同一语言下路径不能重复，冲突返回 `40900`。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPageCreateRequest'
+      responses:
+        '200':
+          description: |
+            新建的页面草稿。`code = 0` 成功；`40000` 参数错误；`40100` 未登录；`40400` 复制来源不存在；`40900` 路径冲突；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPageDraftApiResponse'
+
+  /api/v1/admin/pages/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    get:
+      tags: [页面内容]
+      operationId: getAdminPage
+      summary: 页面详情（当前草稿）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: |
+            页面草稿。`code = 0` 成功；`40000` ID 无效；`40100` 未登录；`40400` 页面不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPageDraftApiResponse'
+    put:
+      tags: [页面内容]
+      operationId: saveAdminPageDraft
+      summary: 保存草稿
+      description: |
+        保存页面路径、名称、SEO 与区块。只写草稿，不影响线上内容。
+        `seo` 省略时保留原值；`blocks` 省略时保留原区块，传空数组表示清空。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPageSaveDraftRequest'
+      responses:
+        '200':
+          description: |
+            保存后的页面草稿。`code = 0` 成功；`40000` 参数错误；`40100` 未登录；`40400` 页面不存在；`40900` 路径冲突；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPageDraftApiResponse'
+    delete:
+      tags: [页面内容]
+      operationId: deleteAdminPage
+      summary: 软删除页面
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: |
+            删除结果。`code = 0` 成功；`40000` ID 无效；`40100` 未登录；`40400` 页面不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /api/v1/admin/pages/{id}/translate:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    post:
+      tags: [页面内容]
+      operationId: translateAdminPage
+      summary: 创建或获取另一语言配对草稿
+      description: |
+        目标语言已存在配对页面时直接返回该页面，不重复创建。
+        未传 `blocks` 时复制源页面区块结构、生成新的区块 ID，并清空标题 / 正文等可翻译文本；
+        图片、视频、链接、图标、主题、版式与数字 / 布尔值保留。SEO 默认清空。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPageTranslateRequest'
+      responses:
+        '200':
+          description: |
+            配对页面草稿（新建或已存在）。`code = 0` 成功；`40000` 参数错误；`40100` 未登录；`40400` 源页面不存在；`40900` 路径冲突；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPageDraftApiResponse'
+
+  /api/v1/admin/pages/{id}/publish:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    post:
+      tags: [页面内容]
+      operationId: publishAdminPage
+      summary: 发布页面
+      description: |
+        用当前草稿覆盖线上内容，`version + 1`，状态改为 `published`，并写入发布记录。
+        只影响当前语言，不级联发布配对语言。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPagePublishRequest'
+      responses:
+        '200':
+          description: |
+            发布结果。`code = 0` 成功；`40000` ID 无效；`40100` 未登录；`40400` 页面不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPagePublishApiResponse'
+
+  /api/v1/admin/pages/{id}/unpublish:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    post:
+      tags: [页面内容]
+      operationId: unpublishAdminPage
+      summary: 下架页面
+      description: |
+        状态改为未发布并清空线上内容，草稿保留，可再次发布。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPagePublishRequest'
+      responses:
+        '200':
+          description: |
+            下架结果。`code = 0` 成功；`40000` ID 无效；`40100` 未登录；`40400` 页面不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /api/v1/admin/pages/{id}/preview-token:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    post:
+      tags: [页面内容]
+      operationId: createAdminPagePreviewToken
+      summary: 生成草稿预览令牌
+      description: |
+        生成带 `page_id` / `locale` / 过期时间的 HMAC 签名令牌，默认有效期 30 分钟。
+        令牌用于前台预览接口读取该页面草稿，前台预览接口尚未实现。
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: |
+            预览令牌。`code = 0` 成功；`40000` ID 无效；`40100` 未登录；`40400` 页面不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPagePreviewTokenApiResponse'
+
+  /api/v1/admin/menus:
+    get:
+      tags: [导航菜单]
+      operationId: listAdminMenus
+      summary: 菜单列表
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: |
+            菜单容器列表。`code = 0` 成功；`40100` 未登录；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMenuListApiResponse'
+
+  /api/v1/admin/menus/{code}:
+    parameters:
+      - $ref: '#/components/parameters/MenuCode'
+    get:
+      tags: [导航菜单]
+      operationId: getAdminMenu
+      summary: 菜单详情与菜单项
+      description: 返回两级菜单树；页脚顶级项是栏目，`children` 是栏目内链接。
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: |
+            菜单详情。`code = 0` 成功；`40000` 菜单编码不正确；`40100` 未登录；`40400` 菜单不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMenuDetailApiResponse'
+    put:
+      tags: [导航菜单]
+      operationId: saveAdminMenu
+      summary: 整体保存菜单项
+      description: |
+        整体替换菜单项，`items` 的数组顺序即展示顺序。
+        菜单容器不存在时自动创建；传空数组表示清空菜单。菜单项最多两级。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminMenuSaveRequest'
+      responses:
+        '200':
+          description: |
+            保存后的菜单详情。`code = 0` 成功；`40000` 参数错误；`40100` 未登录；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMenuDetailApiResponse'
+
+  /api/v1/admin/settings:
+    get:
+      tags: [站点配置]
+      operationId: getAdminSettings
+      summary: 读取站点设置
+      description: |
+        返回指定语言的站点设置，全局项与语言级设置合并。管理后台保存的站点配置 key
+        （`site_name` / `company_name` / `tagline` / `contact` / `brand` / `header` / `footer` /
+        `copyright` / `icp` / `socials` / `default_locale` / `allow_index` / `seo`）按全局保存，
+        值本身可携带中英文文案。
+        响应为扁平结构：`locale` 加各设置 key，值结构与保存时一致。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocaleQuery'
+      responses:
+        '200':
+          description: |
+            站点设置。`code = 0` 成功；`40000` 语言参数不正确；`40100` 未登录；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteSettingsApiResponse'
+    put:
+      tags: [站点配置]
+      operationId: saveAdminSettings
+      summary: 保存站点设置
+      description: |
+        按 `key + locale` 保存。管理后台的站点配置 key（`site_name` / `company_name` / `tagline` /
+        `contact` / `brand` / `header` / `footer` / `copyright` / `icp` / `socials` /
+        `default_locale` / `allow_index` / `seo`）作为全局项保存，其余 key 按 `locale` 保存；
+        只更新传入的 key，不删除未传的设置。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteSettingsSaveRequest'
+      responses:
+        '200':
+          description: |
+            保存后的站点设置（结构同 GET）。`code = 0` 成功；`40000` 参数错误；`40100` 未登录；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteSettingsApiResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: '管理后台 Access Token，放在 Authorization: Bearer <token>，默认有效期 15 分钟。'
+
+  parameters:
+    PageID:
+      name: id
+      in: path
+      required: true
+      description: 页面 ID（字符串形式的数字）
+      schema:
+        type: string
+        pattern: '^[1-9][0-9]*$'
+        example: '1'
+    MenuCode:
+      name: code
+      in: path
+      required: true
+      description: '菜单容器编码：header 顶部导航，footer 底部导航，footer_bottom 页脚底部链接'
+      schema:
+        type: string
+        enum: [header, footer, footer_bottom]
+    LocaleQuery:
+      name: locale
+      in: query
+      required: false
+      description: '语言：zh-CN / en，默认 zh-CN'
+      schema:
+        type: string
+        enum: [zh-CN, en]
+        default: zh-CN
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      description: 页码，从 1 开始
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSizeQuery:
+      name: page_size
+      in: query
+      required: false
+      description: 每页条数，最大 100
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    ApiEnvelope:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: '业务码：0 成功；40000 参数错误；40100 未登录 / 令牌无效；40300 无权限；40400 不存在；40900 资源冲突；50000 服务端错误'
+          example: 0
+        message:
+          type: string
+          example: ok
+        data:
+          type: object
+          additionalProperties: true
+          description: 业务数据，失败时通常省略；具体结构见各接口的响应 schema
+
+    SEO:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+      example:
+        title: 关于我们 - 小鹊云
+        description: 了解小鹊云
+        keywords: [小鹊云]
+
+    PageBlock:
+      type: object
+      required: [id, type, props]
+      properties:
+        id:
+          type: string
+          description: 区块 ID
+          example: blk_01m5fem2zm
+        type:
+          type: string
+          description: 区块类型，如 hero、rich-text、product-list
+          example: hero
+        props:
+          type: object
+          additionalProperties: true
+          description: 区块属性，由区块 schema 决定
+          example:
+            title: 把想法变成看得见的页面
+            primaryHref: /contact
+            theme: light
+
+    AdminPageTranslation:
+      type: object
+      required: [page_id, locale, path, name, status]
+      properties:
+        page_id:
+          type: string
+          example: '2'
+        locale:
+          type: string
+          enum: [zh-CN, en]
+          example: en
+        path:
+          type: string
+          example: /en/about-us
+        name:
+          type: string
+          example: About Us
+        status:
+          type: string
+          enum: [draft, published]
+
+    AdminPageSummary:
+      type: object
+      required: [id, group_id, locale, path, name, status, version, updated_at, updated_by, translations]
+      properties:
+        id:
+          type: string
+        group_id:
+          type: string
+          description: 翻译组 ID（ULID），中英文页面共用
+          example: 01M5FEKH80BPJ15WGT4459KBPN
+        locale:
+          type: string
+          enum: [zh-CN, en]
+        path:
+          type: string
+          example: /about
+        name:
+          type: string
+          example: 关于我们
+        status:
+          type: string
+          enum: [draft, published]
+        version:
+          type: integer
+          description: 发布序号，每次发布 +1
+          example: 3
+        updated_at:
+          type: integer
+          format: int64
+          description: 最后更新时间（Unix 秒）
+        updated_by:
+          type: string
+          description: 最后修改人显示名称，未知时为空字符串
+          example: 小阙
+        translations:
+          type: array
+          description: 同一翻译组下的其他语言版本
+          items:
+            $ref: '#/components/schemas/AdminPageTranslation'
+
+    AdminPageDraft:
+      type: object
+      required: [id, group_id, locale, path, name, status, version, seo, blocks, updated_at]
+      properties:
+        id:
+          type: string
+        group_id:
+          type: string
+        locale:
+          type: string
+          enum: [zh-CN, en]
+        path:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [draft, published]
+        version:
+          type: integer
+          description: 发布序号，每次发布 +1
+        seo:
+          $ref: '#/components/schemas/SEO'
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+        updated_at:
+          type: integer
+          format: int64
+
+    AdminPageListResponse:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminPageSummary'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+    AdminPageCreateRequest:
+      type: object
+      required: [path, name]
+      properties:
+        locale:
+          type: string
+          enum: [zh-CN, en]
+          default: zh-CN
+        path:
+          type: string
+          description: 页面路径，自动补前导斜杠并去掉末尾斜杠
+          example: /about
+        name:
+          type: string
+          maxLength: 200
+          example: 关于我们
+        seo:
+          $ref: '#/components/schemas/SEO'
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+        copy_from_id:
+          type: string
+          description: 复制来源页面 ID；非空时复制其区块结构并重新生成区块 ID
+          example: ''
+
+    AdminPageSaveDraftRequest:
+      type: object
+      properties:
+        path:
+          type: string
+          description: 省略或为空时保留原路径
+        name:
+          type: string
+          description: 省略或为空时保留原名称
+          maxLength: 200
+        seo:
+          $ref: '#/components/schemas/SEO'
+        blocks:
+          type: array
+          description: 省略时保留原区块；传空数组表示清空
+          items:
+            $ref: '#/components/schemas/PageBlock'
+
+    AdminPageTranslateRequest:
+      type: object
+      required: [path]
+      properties:
+        from_locale:
+          type: string
+          enum: [zh-CN, en]
+          description: 源语言，省略时使用源页面语言
+        to_locale:
+          type: string
+          enum: [zh-CN, en]
+          description: 目标语言，省略时取另一种语言
+        path:
+          type: string
+          description: 翻译页面路径，必填
+          example: /en/about-us
+        name:
+          type: string
+          description: 页面名称，省略时在源名称后追加 (EN) / （中文）
+        seo:
+          $ref: '#/components/schemas/SEO'
+        blocks:
+          type: array
+          description: 省略时由服务端复制并清空可翻译文本
+          items:
+            $ref: '#/components/schemas/PageBlock'
+
+    AdminPagePublishRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          description: 发布 / 下架备注，写入发布记录
+          example: 更新首屏文案
+
+    AdminPagePublishResponse:
+      type: object
+      required: [version, published_at]
+      properties:
+        version:
+          type: integer
+          example: 4
+        published_at:
+          type: integer
+          format: int64
+          description: 发布时间（Unix 秒）
+
+    AdminPagePreviewTokenResponse:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token:
+          type: string
+          description: HMAC 签名令牌，格式 base64url(payload).base64url(signature)
+        expires_at:
+          type: integer
+          format: int64
+          description: 过期时间（Unix 秒）
+
+    AdminMenuItem:
+      type: object
+      required: [label]
+      properties:
+        id:
+          type: string
+          description: 菜单项 ID；保存时由服务端重新生成
+        label:
+          type: object
+          additionalProperties:
+            type: string
+          description: '多语言文案，如 {"zh-CN":"首页","en":"Home"}'
+          example:
+            zh-CN: 首页
+            en: Home
+        path:
+          type: string
+          description: 页面路径、内容 slug 或外链
+          example: /
+        link_type:
+          type: string
+          enum: [page, content, external, none]
+          default: page
+        target:
+          type: string
+          enum: [_self, _blank]
+          default: _self
+        visible:
+          type: boolean
+          default: true
+        sort:
+          type: integer
+          description: 同级排序，省略时按数组顺序
+        children:
+          type: array
+          description: 子项；仅页脚栏目使用，最多一级
+          items:
+            $ref: '#/components/schemas/AdminMenuItem'
+
+    AdminMenuSummary:
+      type: object
+      required: [id, code, name, description, updated_at]
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+          enum: [header, footer, footer_bottom]
+        name:
+          type: string
+          example: 顶部导航
+        description:
+          type: string
+          example: ''
+        updated_at:
+          type: integer
+          format: int64
+
+    AdminMenuDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdminMenuSummary'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminMenuItem'
+
+    AdminMenuListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminMenuSummary'
+
+    AdminMenuSaveRequest:
+      type: object
+      required: [items]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: 菜单名称，省略时使用默认名称
+        items:
+          type: array
+          description: 菜单项，数组顺序即展示顺序；最多两级
+          items:
+            $ref: '#/components/schemas/AdminMenuItem'
+
+    SiteSettings:
+      type: object
+      required: [locale]
+      properties:
+        locale:
+          type: string
+          enum: [zh-CN, en]
+      additionalProperties: true
+      description: |
+        扁平设置结构：`locale` 加各设置 key。
+        常用 key：`site_name` / `company_name` / `tagline` / `contact` / `brand` / `header` / `footer` / `allow_index` / `copyright` / `icp` / `socials` / `seo`。
+
+    SiteSettingsSaveRequest:
+      type: object
+      required: [locale]
+      properties:
+        locale:
+          type: string
+          enum: [zh-CN, en]
+          default: zh-CN
+      additionalProperties: true
+      description: |
+        与 GET 响应相同的扁平结构。管理后台的站点配置 key 按全局保存，其余 key 按 `locale` 保存。
+      example:
+        locale: zh-CN
+        site_name: 小鹊云
+        brand:
+          logo: ''
+          accent: '#E8503A'
+          background: '#F6F2EA'
+          dark_background: '#141518'
+        allow_index: true
+
+    # ---------- 带业务数据的统一响应 ----------
+    AdminPageListApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminPageListResponse'
+
+    AdminPageDraftApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminPageDraft'
+
+    AdminPagePublishApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminPagePublishResponse'
+
+    AdminPagePreviewTokenApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminPagePreviewTokenResponse'
+
+    AdminMenuListApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminMenuListResponse'
+
+    AdminMenuDetailApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminMenuDetail'
+
+    SiteSettingsApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/SiteSettings'

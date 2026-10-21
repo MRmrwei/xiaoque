@@ -447,31 +447,43 @@ function openCreate() {
   createOpen.value = true
 }
 
-function submitCreate() {
+async function submitCreate() {
   if (createIssue.value) return
-  const page = pagesStore.createPage({
-    name: createForm.name.trim(),
-    path: createPath.value,
-    locale: createForm.locale,
-    template: createForm.template
-  })
-  createOpen.value = false
-  ElMessage.success(`已创建「${page.name}」`)
-  openEditor(page)
+  try {
+    const page = await pagesStore.createPage({
+      name: createForm.name.trim(),
+      path: createPath.value,
+      locale: createForm.locale,
+      template: createForm.template
+    })
+    createOpen.value = false
+    ElMessage.success(`已创建「${page.name}」`)
+    openEditor(page)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '创建页面失败')
+  }
 }
 
 /* 复制 / 翻译 / 删除 */
-function duplicate(row: unknown) {
-  const copy = pagesStore.duplicatePage(asPage(row))
-  ElMessage.success(`已复制为「${copy.name}」`)
+async function duplicate(row: unknown) {
+  try {
+    const copy = await pagesStore.duplicatePage(asPage(row))
+    ElMessage.success(`已复制为「${copy.name}」`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '复制页面失败')
+  }
 }
 
-function openTranslation(row: unknown) {
+async function openTranslation(row: unknown) {
   const page = asPage(row)
   const existing = pagesStore.pairOf(page)
-  const target = existing ?? pagesStore.createTranslation(page)
-  ElMessage.success(existing ? '已存在配对版本，正在打开' : '已创建翻译草稿')
-  openEditor(target)
+  try {
+    const target = existing ?? (await pagesStore.createTranslation(page))
+    ElMessage.success(existing ? '已存在配对版本，正在打开' : '已创建翻译草稿')
+    openEditor(target)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '创建翻译版本失败')
+  }
 }
 
 async function remove(row: unknown) {
@@ -482,10 +494,15 @@ async function remove(row: unknown) {
       '删除页面',
       { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
     )
-    pagesStore.deletePage(page.id)
-    ElMessage.success('页面已删除')
   } catch {
-    // cancelled
+    return
+  }
+
+  try {
+    await pagesStore.deletePage(page.id)
+    ElMessage.success('页面已删除')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '删除页面失败')
   }
 }
 
@@ -505,12 +522,16 @@ function openPublish(row: unknown) {
   publishOpen.value = true
 }
 
-function confirmPublish() {
+async function confirmPublish() {
   const page = publishTarget.value
   if (!page) return
-  pagesStore.publishPage(page)
-  publishOpen.value = false
-  ElMessage.success(`「${page.name}」已发布`)
+  try {
+    await pagesStore.publishPage(page)
+    publishOpen.value = false
+    ElMessage.success(`「${page.name}」已发布`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '发布失败，请稍后重试')
+  }
 }
 
 function changeStatus(row: unknown, command: string) {
@@ -531,10 +552,15 @@ async function unpublish(row: unknown) {
       '下架页面',
       { type: 'warning', confirmButtonText: '确认下架', cancelButtonText: '取消' }
     )
-    pagesStore.unpublishPage(page)
-    ElMessage.success(`「${page.name}」已下架`)
   } catch {
-    // cancelled
+    return
+  }
+
+  try {
+    await pagesStore.unpublishPage(page)
+    ElMessage.success(`「${page.name}」已下架`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '下架失败，请稍后重试')
   }
 }
 

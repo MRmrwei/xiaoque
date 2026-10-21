@@ -5,10 +5,22 @@
         <p class="adm-kicker">LEADS INBOX</p>
         <h1 class="adm-title">表单留言</h1>
         <p class="adm-sub">
-          查看联系表单提交的线索，跟进后标记处理状态。数据保存在当前浏览器，仅用于演示，不会发送到线上。
+          查看联系表单提交的线索，跟进后标记处理状态。
         </p>
       </div>
+      <div class="adm-actions">
+        <el-button :loading="exporting" @click="exportCsv">导出 CSV</el-button>
+      </div>
     </header>
+
+    <el-alert
+      v-if="pagesStore.submissionsError"
+      class="sub-error"
+      :title="pagesStore.submissionsError"
+      type="error"
+      :closable="false"
+      show-icon
+    />
 
     <div class="sub-stats">
       <div v-for="item in stats" :key="item.label" class="sub-stat">
@@ -18,7 +30,7 @@
       </div>
     </div>
 
-    <section class="adm-card">
+    <section class="adm-card" v-loading="pagesStore.submissionsLoading">
       <div class="adm-toolbar">
         <el-input
           v-model="keyword"
@@ -46,12 +58,14 @@
         </el-select>
 
         <span class="toolbar-spacer" />
-        <span class="mono list-count">{{ filtered.length }} / {{ submissions.length }} MESSAGES</span>
+        <span class="mono list-count">
+          {{ submissions.length }} / {{ pagesStore.submissionTotal }} MESSAGES
+        </span>
       </div>
 
       <el-table
-        v-if="filtered.length"
-        :data="filtered"
+        v-if="submissions.length"
+        :data="submissions"
         row-key="id"
         class="submissions-table"
         @row-click="openDetail"
@@ -89,7 +103,7 @@
               <span class="lang-badge" :class="{ 'is-en': row.locale === 'en' }">
                 {{ row.locale === 'en' ? 'EN' : '中' }}
               </span>
-              <span class="source-page">{{ row.pageName }}</span>
+              <span class="source-page">{{ row.locale === 'en' ? 'English' : '中文' }}</span>
             </div>
           </template>
         </el-table-column>
@@ -119,9 +133,20 @@
       <el-empty
         v-else
         :description="
-          submissions.length ? '没有符合条件的留言，换个筛选条件试试' : '还没有收到留言'
+          hasFilters ? '没有符合条件的留言，换个筛选条件试试' : '还没有收到留言'
         "
       />
+
+      <div v-if="pagesStore.submissionTotal > pageSize" class="sub-pagination">
+        <el-pagination
+          v-model:current-page="page"
+          :page-size="pageSize"
+          :total="pagesStore.submissionTotal"
+          layout="prev, pager, next"
+          background
+          @current-change="changePage"
+        />
+      </div>
     </section>
 
     <el-drawer
@@ -171,10 +196,6 @@
         <div class="detail-section">
           <p class="detail-label">来源</p>
           <dl class="detail-grid">
-            <div>
-              <dt>页面</dt>
-              <dd>{{ active.pageName }} <span class="mono">{{ active.pagePath }}</span></dd>
-            </div>
             <div>
               <dt>语言</dt>
               <dd>{{ active.locale === 'en' ? 'English' : '中文' }}</dd>
@@ -237,12 +258,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import type { ContactSubmissionRecord, SubmissionStatus } from '@/types/admin'
 import { usePagesStore } from '@/stores/pages'
+import { apiDownload, type QueryParams } from '@/services/api'
 
 const pagesStore = usePagesStore()
 const { submissions } = storeToRefs(pagesStore)
@@ -252,6 +274,10 @@ const statusFilter = ref<'all' | SubmissionStatus>('all')
 const localeFilter = ref<'all' | 'zh' | 'en'>('all')
 const drawerOpen = ref(false)
 const active = ref<ContactSubmissionRecord | null>(null)
+const page = ref(1)
+const pageSize = ref(20)
+const exporting = ref(false)
+let keywordTimer: ReturnType<typeof setTimeout> | null = null
 
 const statusMap: Record<SubmissionStatus, { label: string; tone: string }> = {
   new: { label: '待处理', tone: 'accent' },
@@ -260,43 +286,72 @@ const statusMap: Record<SubmissionStatus, { label: string; tone: string }> = {
   spam: { label: '垃圾', tone: 'neutral' }
 }
 
-const filtered = computed(() => {
-  const query = keyword.value.trim().toLowerCase()
-  return submissions.value
-    .filter((item) => statusFilter.value === 'all' || item.status === statusFilter.value)
-    .filter((item) => localeFilter.value === 'all' || item.locale === localeFilter.value)
-    .filter((item) => {
-      if (!query) return true
-      return [item.name, item.email, item.company, item.message].some((value) =>
-        value.toLowerCase().includes(query)
-      )
-    })
-    .slice()
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+const hasFilters = computed(
+  () =>
+    statusFilter.value !== 'all' ||
+    localeFilter.value !== 'all' ||
+    Boolean(keyword.value.trim())
+)
+
+const stats = computed(() => {
+  const current = pagesStore.submissionStats
+  return [
+    {
+      label: '全部留言',
+      value: current.total,
+      note: '累计提交'
+    },
+    {
+      label: '待处理',
+      value: current.new,
+      note: '需要跟进'
+    },
+    {
+      label: '处理中',
+      value: current.processing,
+      note: '正在联系'
+    },
+    {
+      label: '已完成',
+      value: current.done,
+      note: '已关闭'
+    }
+  ]
 })
 
-const stats = computed(() => [
-  {
-    label: '全部留言',
-    value: submissions.value.length,
-    note: '累计提交'
-  },
-  {
-    label: '待处理',
-    value: submissions.value.filter((item) => item.status === 'new').length,
-    note: '需要跟进'
-  },
-  {
-    label: '处理中',
-    value: submissions.value.filter((item) => item.status === 'processing').length,
-    note: '正在联系'
-  },
-  {
-    label: '已完成',
-    value: submissions.value.filter((item) => item.status === 'done').length,
-    note: '已关闭'
-  }
-])
+function reload(): void {
+  void pagesStore.loadSubmissions({
+    status: statusFilter.value,
+    locale: localeFilter.value,
+    keyword: keyword.value,
+    page: page.value,
+    pageSize: pageSize.value
+  })
+}
+
+function changePage(value: number): void {
+  page.value = value
+  reload()
+}
+
+watch([statusFilter, localeFilter], () => {
+  page.value = 1
+  reload()
+})
+
+watch(keyword, () => {
+  if (keywordTimer) clearTimeout(keywordTimer)
+  keywordTimer = setTimeout(() => {
+    page.value = 1
+    reload()
+  }, 300)
+})
+
+onMounted(reload)
+
+onBeforeUnmount(() => {
+  if (keywordTimer) clearTimeout(keywordTimer)
+})
 
 function statusMeta(status: SubmissionStatus) {
   return statusMap[status]
@@ -334,14 +389,60 @@ function openDetail(row: unknown): void {
   drawerOpen.value = true
 }
 
-function setStatus(status: SubmissionStatus): void {
-  if (!active.value) return
-  pagesStore.setSubmissionStatus(active.value.id, status)
-  ElMessage.success(`已标记为「${statusMap[status].label}」`)
+async function setStatus(status: SubmissionStatus): Promise<void> {
+  const current = active.value
+  if (!current) return
+  try {
+    await pagesStore.setSubmissionStatus(current.id, status)
+    active.value = pagesStore.submissions.find((item) => item.id === current.id) ?? null
+    if (!active.value) drawerOpen.value = false
+    ElMessage.success(`已标记为「${statusMap[status].label}」`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '更新留言状态失败')
+  }
+}
+
+async function exportCsv(): Promise<void> {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const query: QueryParams = {}
+    if (statusFilter.value !== 'all') query.status = statusFilter.value
+    if (localeFilter.value !== 'all') {
+      query.locale = localeFilter.value === 'en' ? 'en' : 'zh-CN'
+    }
+    if (keyword.value.trim()) query.keyword = keyword.value.trim()
+
+    const { blob, filename } = await apiDownload('/admin/submissions/export', { query })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    // 等浏览器开始下载后再释放 Blob URL，避免部分浏览器取消下载。
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    ElMessage.success('导出已开始')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '导出失败，请稍后重试')
+  } finally {
+    exporting.value = false
+  }
 }
 </script>
 
 <style scoped>
+.sub-error {
+  margin-bottom: 16px;
+}
+
+.sub-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 4px 4px;
+}
+
 .sub-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

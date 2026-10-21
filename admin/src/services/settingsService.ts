@@ -23,7 +23,8 @@ type LegacyHeaderSettings = Partial<Omit<HeaderSettings, 'announcement'>> & {
   ctaHref?: string
 }
 
-type LegacySiteSettings = Omit<Partial<SiteSettings>, 'header' | 'footer'> & {
+/** 旧版本地数据或 Go API 返回的部分设置，允许缺失新字段。 */
+export type SiteSettingsInput = Omit<Partial<SiteSettings>, 'header' | 'footer'> & {
   header?: LegacyHeaderSettings
   footer?: LegacyFooterSettings
 }
@@ -70,7 +71,7 @@ function resolveHeaderCtas(header: LegacyHeaderSettings, defaults: HeaderCta[]):
  * Merge persisted demo settings with the current seed shape.
  * Older localStorage payloads may miss header/footer or newly added fields.
  */
-export function normalizeSiteSettings(raw?: LegacySiteSettings | null): SiteSettings {
+export function normalizeSiteSettings(raw?: SiteSettingsInput | null): SiteSettings {
   const base = clone(seedSettings)
   if (!raw) return base
 

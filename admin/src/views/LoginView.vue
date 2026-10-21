@@ -1,15 +1,8 @@
 <template>
   <div class="login-page">
     <div class="login-shell">
-      <aside class="login-brand">
+      <aside class="login-brand" :style="brandStyle">
         <div class="brand-mark-row">
-          <img
-            v-if="loginSettings.logo"
-            :src="loginSettings.logo"
-            class="login-logo"
-            alt="Logo"
-          />
-          <BrandMark v-else :size="42" inverse />
           <div class="brand-mark-text">
             <strong>{{ loginSettings.brandName || '小鹊云' }}</strong>
             <span>{{ loginSettings.brandSubName || 'SITE STUDIO' }}</span>
@@ -121,14 +114,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import BrandMark from '~/components/BrandMark.vue'
 import { login } from '@/services/auth'
 import { usePagesStore } from '@/stores/pages'
+import { loginBrandBackground } from '@/utils/loginBackground'
 
 const router = useRouter()
 const route = useRoute()
 const pagesStore = usePagesStore()
 const loginSettings = computed(() => pagesStore.loginSettings)
+const brandStyle = computed(() =>
+  loginBrandBackground(loginSettings.value.backgroundImage)
+)
 const isDev = import.meta.env.DEV
 
 const username = ref('')
@@ -332,16 +328,6 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.login-logo {
-  width: 42px;
-  height: 42px;
-  flex: none;
-  object-fit: contain;
-  padding: 5px;
-  border-radius: 10px;
-  background: #f6f2ea;
 }
 
 .brand-mark-text {

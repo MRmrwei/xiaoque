@@ -388,11 +388,16 @@ watch(
   { deep: true }
 )
 
-function saveFooter() {
+async function saveFooter() {
   saveState.value = 'saving'
-  pagesStore.saveSettings()
-  saveState.value = 'saved'
-  ElMessage.success('底部导航设置已保存')
+  try {
+    await pagesStore.saveSettings()
+    saveState.value = 'saved'
+    ElMessage.success('底部导航设置已保存')
+  } catch (error) {
+    saveState.value = 'dirty'
+    ElMessage.error(error instanceof Error ? error.message : '保存失败，请稍后重试')
+  }
 }
 
 const issues = computed(() => {

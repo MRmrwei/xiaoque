@@ -7,7 +7,7 @@
         <p class="adm-kicker">ACCOUNT &amp; SECURITY</p>
         <h1 class="adm-title">管理员账号</h1>
         <p class="adm-sub">
-          维护当前管理员的显示资料与登录密码。演示版数据保存在当前浏览器，不会写入线上账号。
+          维护当前管理员的显示资料与登录密码。
         </p>
       </div>
       <div class="adm-actions">

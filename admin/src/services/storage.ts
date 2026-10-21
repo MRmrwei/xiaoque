@@ -7,7 +7,7 @@ export function loadDemo(): PersistedDemo | null {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as PersistedDemo
-    if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.pages)) {
+    if (parsed?.schemaVersion !== 1) {
       return null
     }
     return parsed

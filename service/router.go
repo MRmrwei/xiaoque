@@ -15,7 +15,7 @@ import (
 // customizeRegister registers customize routers.
 func customizedRegister(r *server.Hertz, app application.Application) {
 	r.Use(accesslog.New(
-		accesslog.WithFormat("[${time}] ${status} - ${latency} ${clientIP} ${method} ${path} ${queryParams}"),
+		accesslog.WithFormat("[${time}] ${status} - ${latency} ${clientIP} ${method} ${path} ${reqHeaders} ${queryParams}"),
 		accesslog.WithTimeFormat("2006-01-02 15:04:05"),
 		accesslog.WithAccessLogFunc(hlog.CtxInfof),
 	))

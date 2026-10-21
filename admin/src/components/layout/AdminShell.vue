@@ -1,14 +1,6 @@
 <template>
   <div class="admin-shell">
     <aside class="admin-side">
-      <router-link to="/pages" class="side-brand">
-        <BrandMark :size="34" inverse />
-        <span class="side-brand-text">
-          <strong>小鹊云</strong>
-          <span>SITE STUDIO</span>
-        </span>
-      </router-link>
-
       <p class="side-label">工作台</p>
       <nav class="side-nav">
         <router-link to="/pages" class="side-link" :class="{ active: isPagesActive }">
@@ -45,31 +37,6 @@
         </router-link>
       </nav>
       <p class="side-note">后台登录 · 展示文案</p>
-
-      <div class="side-spacer" />
-
-      <div class="demo-note">
-        <strong>本地演示</strong>
-        <p>数据保存在当前浏览器，不会更新线上官网，也没有接后端。</p>
-        <button class="reset-link" @click="resetDemo">重置演示数据</button>
-      </div>
-
-      <div class="side-user">
-        <span class="avatar side-avatar">
-          <img v-if="avatarUrl" :src="avatarUrl" alt="" />
-          <template v-else>{{ avatarText }}</template>
-        </span>
-        <div class="side-user-text">
-          <strong>{{ displayName }}</strong>
-          <span>管理员</span>
-        </div>
-        <router-link to="/settings/account" class="side-account" title="账号与安全">
-          <el-icon><User /></el-icon>
-        </router-link>
-        <button class="side-logout" title="退出登录" @click="handleLogout">
-          <el-icon><SwitchButton /></el-icon>
-        </button>
-      </div>
     </aside>
 
     <div class="admin-main">
@@ -78,17 +45,28 @@
           <span>工作台</span>
           <span>/</span>
           <strong>{{ route.meta.title || '站点编排' }}</strong>
-          <el-tag v-if="pagesStore.storageError" type="danger" size="small" effect="plain">
+          <el-tag v-if="pagesStore.loadError" type="danger" size="small" effect="plain">
+            后端连接异常
+          </el-tag>
+          <el-tag v-else-if="pagesStore.storageError" type="danger" size="small" effect="plain">
             存储异常
           </el-tag>
         </div>
-        <div class="top-actions">
-          <span class="demo-pill"><i /> LOCAL DEMO</span>
-          <a :href="websiteUrl" target="_blank" rel="noopener" class="top-link">查看官网 ↗</a>
-          <span class="avatar side-avatar">
+        <div class="top-user">
+          <span class="avatar user-avatar">
             <img v-if="avatarUrl" :src="avatarUrl" alt="" />
             <template v-else>{{ avatarText }}</template>
           </span>
+          <div class="top-user-text">
+            <strong>{{ displayName }}</strong>
+            <span>管理员</span>
+          </div>
+          <router-link to="/settings/account" class="top-user-action" title="账号与安全">
+            <el-icon><User /></el-icon>
+          </router-link>
+          <button class="top-user-action" title="退出登录" @click="handleLogout">
+            <el-icon><SwitchButton /></el-icon>
+          </button>
         </div>
       </header>
 
@@ -98,7 +76,15 @@
     </div>
 
     <el-alert
-      v-if="pagesStore.storageError"
+      v-if="pagesStore.loadError"
+      class="storage-alert"
+      :title="`站点数据加载失败：${pagesStore.loadError}`"
+      type="error"
+      :closable="false"
+      show-icon
+    />
+    <el-alert
+      v-else-if="pagesStore.storageError"
       class="storage-alert"
       :title="pagesStore.storageError"
       type="warning"
@@ -113,7 +99,6 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Message, Setting, SwitchButton, User } from '@element-plus/icons-vue'
-import BrandMark from '~/components/BrandMark.vue'
 import { usePagesStore } from '@/stores/pages'
 import { logout, profileRef, sessionRef } from '@/services/auth'
 
@@ -125,7 +110,6 @@ const displayName = computed(
 )
 const avatarText = computed(() => displayName.value.charAt(0) || '管')
 const avatarUrl = computed(() => profileRef.value.avatar)
-const websiteUrl = import.meta.env.DEV ? 'http://localhost:3000' : '/'
 
 const isPagesActive = computed(
   () => route.path === '/pages' || route.path.startsWith('/pages/')
@@ -152,20 +136,6 @@ async function handleLogout() {
   ElMessage.success('已退出登录')
   await router.replace({ name: 'login' })
 }
-
-async function resetDemo() {
-  try {
-    await ElMessageBox.confirm(
-      '这会清除你在演示中创建/修改的页面、版本、顶部导航、底部导航、站点配置和表单留言状态，恢复到初始种子数据。确定继续吗？',
-      '重置演示数据',
-      { type: 'warning', confirmButtonText: '确认重置', cancelButtonText: '取消' }
-    )
-    pagesStore.resetDemo()
-    ElMessage.success('演示数据已重置')
-  } catch {
-    // cancelled
-  }
-}
 </script>
 
 <style scoped>
@@ -177,16 +147,19 @@ async function resetDemo() {
   z-index: 100;
 }
 
-.side-user-text {
-  flex: 1;
-  min-width: 0;
+.top-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.side-avatar {
+.user-avatar {
+  width: 30px;
+  height: 30px;
   overflow: hidden;
 }
 
-.side-avatar img {
+.user-avatar img {
   display: block;
   width: 100%;
   height: 100%;
@@ -194,24 +167,49 @@ async function resetDemo() {
   object-fit: cover;
 }
 
-.side-logout,
-.side-account {
-  width: 26px;
-  height: 26px;
+.top-user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.35;
+  margin-right: 4px;
+}
+
+.top-user-text strong {
+  color: var(--adm-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.top-user-text span {
+  font-size: 10px;
+  color: var(--adm-muted-2);
+}
+
+.top-user-action {
+  width: 28px;
+  height: 28px;
   flex: none;
   display: grid;
   place-items: center;
-  border: 0;
-  border-radius: 7px;
+  padding: 0;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
   background: transparent;
-  color: rgba(246, 242, 234, 0.4);
+  color: var(--adm-muted);
+  text-decoration: none;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
 
-.side-logout:hover,
-.side-account:hover {
-  background: rgba(246, 242, 234, 0.08);
-  color: #f6f2ea;
+.top-user-action:hover {
+  background: #fff;
+  color: var(--adm-accent);
+}
+
+@media (max-width: 720px) {
+  .top-user-text {
+    display: none;
+  }
 }
 </style>

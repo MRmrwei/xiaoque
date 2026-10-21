@@ -9,6 +9,7 @@ import AccountSettingsView from '@/views/AccountSettingsView.vue'
 import LoginView from '@/views/LoginView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import { getSession, isAuthenticated, refreshSession } from '@/services/auth'
+import { usePagesStore } from '@/stores/pages'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -60,7 +61,12 @@ const router = createRouter({
           path: 'navigation',
           redirect: { name: 'pages', query: { view: 'header' } }
         },
-        { path: ':pathMatch(.*)*', name: 'not-found', component: NotFoundView }
+        {
+          path: ':pathMatch(.*)*',
+          name: 'not-found',
+          component: NotFoundView,
+          meta: { title: '页面不存在' }
+        }
       ]
     }
   ]
@@ -91,7 +97,18 @@ router.beforeEach(async (to) => {
     }
   }
 
+  // 页面、导航与站点配置都来自 Go API，进入后台前先加载一次。
+  // 加载失败时仍允许进入，由页面展示错误提示，避免卡在路由守卫。
+  const pagesStore = usePagesStore()
+  await pagesStore.ensureLoaded()
+
   return true
+})
+
+// 浏览器标签页标题跟随当前菜单；没有 meta.title 时回退到「页面编排」。
+router.afterEach((to) => {
+  const title = typeof to.meta.title === 'string' ? to.meta.title.trim() : ''
+  document.title = title || '页面编排'
 })
 
 export default router

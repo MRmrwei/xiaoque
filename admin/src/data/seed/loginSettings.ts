@@ -2,7 +2,7 @@ import type { LoginSettings } from '@/types/admin'
 
 export const loginSettings: LoginSettings = {
   captchaEnabled: true,
-  logo: '',
+  backgroundImage: '',
   brandName: '小鹊云',
   brandSubName: 'SITE STUDIO',
   brandKicker: 'MAGPIE CLOUD',

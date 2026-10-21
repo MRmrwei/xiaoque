@@ -78,6 +78,34 @@ func (r *Repository) FindByID(ctx context.Context, id uint64) (*models.User, err
 	return &user, nil
 }
 
+// FindNamesByIDs 批量查询用户显示名称，供页面列表展示最后修改人。
+func (r *Repository) FindNamesByIDs(
+	ctx context.Context,
+	ids []uint64,
+) (map[uint64]string, error) {
+	if r.db == nil {
+		return nil, fmt.Errorf("数据访问层：数据库未初始化")
+	}
+
+	names := make(map[uint64]string, len(ids))
+	if len(ids) == 0 {
+		return names, nil
+	}
+
+	var users []models.User
+	err := r.db.WithContext(ctx).
+		Select("id", "name").
+		Where("id IN ? AND deleted_at = 0", ids).
+		Find(&users).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询用户名称失败：%w", err)
+	}
+	for _, user := range users {
+		names[user.ID] = user.Name
+	}
+	return names, nil
+}
+
 // UpdateLoginState 更新用户最近登录时间与 IP。
 func (r *Repository) UpdateLoginState(
 	ctx context.Context,

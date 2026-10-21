@@ -51,7 +51,7 @@
 | `xqyun_menus` | 菜单容器（顶部 / 底部） | 通过 `xqyun_menu_items.menu_id` 关联 |
 | `xqyun_menu_items` | 菜单项与页脚链接 | `parent_id` 自关联，支持栏目 + 链接 |
 | `xqyun_settings` | 全站设置，按 key + locale 存储 | `value` 为 JSON |
-| `xqyun_form_submissions` | 表单留言 | `page_id` 可选 |
+| `xqyun_form_submissions` | 表单留言 | `form_key` / `locale` |
 | `xqyun_redirects` | 301 / 302 跳转规则 | 无 |
 | `xqyun_audit_logs` | 后台操作审计 | `user_id` 可选 |
 | `xqyun_publish_records` | 页面 / 内容发布记录 | `target_type` + `target_id` |
@@ -192,7 +192,6 @@ value 为 JSON，包含 `user_id`、`token_type`、`user_agent`、`ip`、`expire
 
 - `UNIQUE KEY uk_locale_path (locale, path)`
 - `KEY idx_group (translation_group_id)`
-- `KEY idx_status_updated (status, updated_at)`
 
 `draft_content` 结构：
 
@@ -439,8 +438,7 @@ value 为 JSON，包含 `user_id`、`token_type`、`user_agent`、`ip`、`expire
 | --- | --- | --- | --- | --- |
 | `id` | `BIGINT UNSIGNED` | 否 | 自增 | 主键 |
 | `form_key` | `VARCHAR(50)` | 否 | — | 表单标识，如 `contact` |
-| `page_id` | `BIGINT UNSIGNED` | 是 | `NULL` | 来源页面 |
-| `locale` | `VARCHAR(10)` | 是 | `NULL` | 提交时的语言 |
+| `locale` | `VARCHAR(10)` | 是 | `NULL` | 提交时的语言（来源只记录中文 / 英文） |
 | `name` | `VARCHAR(100)` | 是 | `NULL` | 姓名 |
 | `email` | `VARCHAR(255)` | 是 | `NULL` | 邮箱 |
 | `phone` | `VARCHAR(50)` | 是 | `NULL` | 电话 |
@@ -452,12 +450,6 @@ value 为 JSON，包含 `user_id`、`token_type`、`user_agent`、`ip`、`expire
 | `user_agent` | `VARCHAR(500)` | 是 | `NULL` | 浏览器信息 |
 | `created_at` | `BIGINT UNSIGNED` | 否 | `0` | 提交时间 |
 | `updated_at` | `BIGINT UNSIGNED` | 否 | `0` | 处理时间 |
-
-索引：
-
-- `KEY idx_form_status_created (form_key, status, created_at)`
-- `KEY idx_email (email)`
-- `KEY idx_page_id (page_id)`
 
 说明：`name` / `email` / `phone` / `company` / `message` 是从 `data` 中提取的常用字段，便于列表筛选和导出；完整内容仍以 `data` 为准。
 
@@ -521,7 +513,6 @@ value 为 JSON，包含 `user_id`、`token_type`、`user_agent`、`ip`、`expire
 索引：
 
 - `KEY idx_target_created (target_type, target_id, created_at)`
-- `KEY idx_status_created (status, created_at)`
 
 ---
 
@@ -539,8 +530,6 @@ xqyun_contents ──> xqyun_media
 xqyun_menus ──< xqyun_menu_items（parent_id 自关联）
 
 xqyun_settings：按 key + locale 读取
-
-xqyun_form_submissions ──> xqyun_pages（可选）
 ```
 
 页面发布流程：

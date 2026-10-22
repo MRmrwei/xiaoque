@@ -3,10 +3,6 @@
 package main
 
 import (
-	"os"
-	"strings"
-
-	hertzapp "github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/hertz-contrib/logger/accesslog"
@@ -19,7 +15,7 @@ import (
 // customizeRegister registers customize routers.
 func customizedRegister(r *server.Hertz, app application.Application) {
 	r.Use(accesslog.New(
-		accesslog.WithFormat("[${time}] ${status} - ${latency} ${clientIP} ${method} ${path} ${reqHeaders} ${queryParams}"),
+		accesslog.WithFormat("[${time}] ${status} - ${latency} ${clientIP} ${method} ${path} ${queryParams}"),
 		accesslog.WithTimeFormat("2006-01-02 15:04:05"),
 		accesslog.WithAccessLogFunc(hlog.CtxInfof),
 	))
@@ -27,34 +23,7 @@ func customizedRegister(r *server.Hertz, app application.Application) {
 	r.GET("/ping", handler.NewPingController(app).Ping)
 
 	// 媒体文件静态访问，支持 Range 以便视频拖动进度。
-	uploadCfg := app.Upload()
-	localStorage := uploadCfg.Provider == "" || strings.EqualFold(uploadCfg.Provider, "local")
-	if localStorage && uploadCfg.Dir != "" {
-		if err := os.MkdirAll(uploadCfg.Dir, 0o755); err != nil {
-			hlog.Fatalf("create upload dir %s: %v", uploadCfg.Dir, err)
-		}
-		prefix := strings.TrimRight(uploadCfg.URLPrefix, "/")
-		if prefix == "" {
-			prefix = "/uploads"
-		}
-		// Hertz 的 FS 默认把完整请求路径拼到 Root 后面，需要先去掉 URL 前缀，
-		// 否则会去找 uploads/uploads/2026/...，导致图片 / 视频全部 404。
-		pathRewrite := func(ctx *hertzapp.RequestContext) []byte {
-			requestPath := strings.TrimPrefix(string(ctx.Path()), prefix)
-			if requestPath == "" {
-				requestPath = "/"
-			}
-			if !strings.HasPrefix(requestPath, "/") {
-				requestPath = "/" + requestPath
-			}
-			return []byte(requestPath)
-		}
-		r.StaticFS(prefix, &hertzapp.FS{
-			Root:            uploadCfg.Dir,
-			AcceptByteRange: true,
-			PathRewrite:     pathRewrite,
-		})
-	}
+	router.RegisterUploadStatic(r, app.Upload())
 
 	r1 := r.Group("/api/v1")
 	{

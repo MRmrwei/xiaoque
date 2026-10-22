@@ -41,17 +41,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command:
-      - sh
-      - -c
-      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+    command: ["redis-server", "--appendonly", "yes"]
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - ./data/redis:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -98,7 +94,7 @@ services:
       REDIS_ENABLED: "true"
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET}
       JWT_COOKIE_SECURE: ${JWT_COOKIE_SECURE:-false}
       UPLOAD_PROVIDER: local
@@ -113,6 +109,8 @@ services:
       - ./data/release/backend/config.yaml:/app/config.yaml:ro
       - ./data/uploads:/app/uploads
       - ./data/logs:/app/logs
+      # Alpine 镜像不带时区数据库，挂载宿主机的 zoneinfo 让 TZ=Asia/Shanghai 生效。
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
     ports:
       - "${BACKEND_PORT:-8888}:8888"
     healthcheck:

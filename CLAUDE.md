@@ -4,7 +4,7 @@
 
 1. 先读 `docs/项目方案.md`。技术栈、架构、数据模型、SEO 与多语言要求都以它为准；实施状态以本文件为准。
 2. 仓库包含三部分：`frontend/`（官网前台，Nuxt 3 SSR）、`admin/`（管理后台，登录、页面、导航、站点配置与表单留言已接 Go API，登录页设置仍为本地演示）和 `service/`（Go 后端，CloudWeGo Hertz）。`service/` 已完成 Hertz + MySQL/Redis 骨架、配置加载、统一响应、`/ping`、后台认证接口（登录 / 刷新 / 退出）、JWT 中间件、访问日志，页面 / 导航 / 站点配置 / 表单留言管理接口、视频素材上传 / 列表接口、前台渲染接口（`render/page`、`site/config`、`site/nav`）与前台表单提交接口（`POST /api/v1/frontend/forms/:key/submissions`）；前台内容库仍未完成。除非用户明确要求，不要修改或运行它。
-3. 后端接口与表结构分别以 `docs/Go后端接口设计.md`、`docs/MySQL数据库表设计.md` 为准；初版上线的范围、接口顺序与建表清单见 `docs/初版上线方案.md`；数据库初始化脚本在 `deploy/init.sql`；管理后台认证会话的 OpenAPI 文档在 `docs/open-api/backend/admin-auth-session.yaml`，站点编排（页面 / 导航 / 站点配置）在 `docs/open-api/backend/page-orchestration-openapi.yaml`，当前管理员资料 / 密码在 `docs/open-api/backend/admin-user-profile-openapi.yaml`；官网前台渲染（`render/page`、`site/config`、`site/nav`）在 `docs/open-api/frontend/frontend-render-openapi.yaml`。
+3. 后端接口与表结构分别以 `docs/Go后端接口设计.md`、`docs/MySQL数据库表设计.md` 为准；初版上线的范围、接口顺序与建表清单见 `docs/初版上线方案.md`；运营人员操作说明见 `docs/运营人员使用手册.md`（Word 版 `docs/运营人员使用手册.docx`）；数据库初始化脚本在 `deploy/init.sql`；管理后台认证会话的 OpenAPI 文档在 `docs/open-api/backend/admin-auth-session.yaml`，站点编排（页面 / 导航 / 站点配置）在 `docs/open-api/backend/page-orchestration-openapi.yaml`，当前管理员资料 / 密码在 `docs/open-api/backend/admin-user-profile-openapi.yaml`；官网前台渲染（`render/page`、`site/config`、`site/nav`）在 `docs/open-api/frontend/frontend-render-openapi.yaml`。
 4. 回复用中文，直接说明做了什么、怎么验证。预览 / 开发服务用完要关停，不要长期常驻。
 
 ## 当前状态（2026-10-22）
@@ -41,7 +41,7 @@
 
 已实现：
 
-- **登录**：`/#/login`，用户名 + 密码 + 图形验证码（可在基础设置中关闭）；调用 `POST /api/v1/admin/auth/login`，初始账号 `admin` / `123456`（本地开发提示，仅 DEV 显示）。成功后只在 `xiaoque-admin-auth-v1` 保存 Access Token 和用户信息；Refresh Token 由后端写入 HttpOnly Cookie，前端不可读取。Access Token 过期时，路由守卫与请求层都会调用 `POST /api/v1/admin/auth/refresh` 静默续期（请求层刷新成功后自动重试原请求一次，并发刷新共享同一次请求）；刷新失败才清除会话并回登录页。右上角用户区的退出登录会调用 `POST /api/v1/admin/auth/logout` 吊销服务端刷新令牌并清除 Cookie，即使接口失败也会清除本地状态。验证码目前仍是前端生成与校验，后端不校验。
+- **登录**：`/#/login`，用户名 + 密码 + 图形验证码（可在基础设置中关闭）；调用 `POST /api/v1/admin/auth/login`，初始账号为 `admin`，初始密码不在文档中记录，首次登录后必须立即修改；本地开发提示仅在 DEV 显示。成功后只在 `xiaoque-admin-auth-v1` 保存 Access Token 和用户信息；Refresh Token 由后端写入 HttpOnly Cookie，前端不可读取。Access Token 过期时，路由守卫与请求层都会调用 `POST /api/v1/admin/auth/refresh` 静默续期（请求层刷新成功后自动重试原请求一次，并发刷新共享同一次请求）；刷新失败才清除会话并回登录页。右上角用户区的退出登录会调用 `POST /api/v1/admin/auth/logout` 吊销服务端刷新令牌并清除 Cookie，即使接口失败也会清除本地状态。验证码目前仍是前端生成与校验，后端不校验。
 - **基础设置**：独立一级菜单「设置 → 基础设置」；首页为分类列表，目前只有「后台登录」一个分类。进入 `/#/settings/login` 后可开关图形验证码，上传登录页底图（未上传时使用纯黑 `#141518`）、编辑登录页展示区的品牌名称、名称下方小字、眉标、主标题（支持换行）和说明文字，带登录页实时预览；点击「保存设置」写入 `xiaoque-admin-demo-v1`，支持恢复默认。
 - **管理员账号**：`/#/settings/account`，从右上角用户区进入；显示登录账号 `admin`（不可修改），可编辑显示名称、邮箱、手机号并保存（`PUT /api/v1/admin/user/profile`）；支持上传自定义头像（经 `utils/image.ts` 压缩为 320px 以内的 WebP，未上传时保留名称首字文字头像，可随时移除恢复文字头像）；保存后右上角名称、头像实时更新。修改密码调用 `PUT /api/v1/admin/user/password`，服务端 bcrypt 存储；成功后吊销该账号全部刷新令牌、清除 Cookie，前端清除本地会话并跳回登录页。新密码至少 8 个字符、不超过 72 字节。
 - **页面列表**：按语言 / 状态 / 关键词筛选；新建（空白或复制首页结构）；复制、删除、草稿预览、发布 / 下架；保留路径与重复路径校验；一键创建 / 前往翻译版本。
@@ -247,4 +247,5 @@ docker compose up -d
 - 不要把 `admin/` 的登录页本地演示数据当成真实数据；页面、导航、站点配置与表单留言以 Go 后端为准，后台发布不会改写 `frontend/` 的 mock 数据。
 - 不要用未压缩原图或超出配额的内容写 `localStorage`。
 - 不要在访问日志中记录 `${body}`、Authorization、Cookie 等敏感内容；登录接口的请求体包含密码。
+- 不要在 `CLAUDE.md`、`docs/` 或代码注释中记录服务器 IP、SSH 账号密码、数据库密码、`JWT_SECRET`、Token 等敏感信息；部署地址与凭据由运维单独保管。
 - 不要删除 `_backup/` 和 `frontend/dist-share/`。

@@ -38,7 +38,8 @@ cd /xqyun
 chmod +x data/release/backend/xqyun
 mkdir -p data/uploads data/logs
 cp .env.example .env
-# 编辑 .env：MySQL / Redis 密码、JWT_SECRET、UPLOAD_PUBLIC_BASE_URL
+# 编辑 .env：MySQL 密码、JWT_SECRET、UPLOAD_PUBLIC_BASE_URL
+# 当前 Redis 不设置密码（REDIS_PASSWORD 留空）
 docker compose up -d
 ```
 
@@ -50,7 +51,7 @@ docker compose up -d
 - 管理后台：`http://服务器IP/admin/`
 - 健康检查：`http://服务器IP/ping`
 
-初始管理员 `admin` / `123456`，登录后请立即修改密码。
+初始管理员 `admin`，初始密码由部署时提供，登录后请立即修改密码。
 
 ## 说明
 

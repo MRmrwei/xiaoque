@@ -13,9 +13,11 @@ import (
 
 // Application 是 application.Application 的默认实现。
 type Application struct {
-	db    *gorm.DB
-	redis *redis.Client
-	jwt   application.JWTConfig
+	db          *gorm.DB
+	redis       *redis.Client
+	jwt         application.JWTConfig
+	renderCache application.RenderCacheConfig
+	upload      application.UploadConfig
 }
 
 var _ application.Application = (*Application)(nil)
@@ -36,7 +38,13 @@ func New(ctx context.Context, cfg application.Config) (*Application, error) {
 		return nil, err
 	}
 
-	return &Application{db: db, redis: rdb, jwt: cfg.JWT}, nil
+	return &Application{
+		db:          db,
+		redis:       rdb,
+		jwt:         cfg.JWT,
+		renderCache: cfg.RenderCache,
+		upload:      cfg.Upload,
+	}, nil
 }
 
 // DB 返回 MySQL 连接。
@@ -58,6 +66,16 @@ func (a *Application) JWT() application.JWTConfig {
 		config.Clients[name] = client
 	}
 	return config
+}
+
+// RenderCache 返回前台渲染缓存配置。
+func (a *Application) RenderCache() application.RenderCacheConfig {
+	return a.renderCache
+}
+
+// Upload 返回媒体上传与访问配置。
+func (a *Application) Upload() application.UploadConfig {
+	return a.upload
 }
 
 // Close 释放 DB 与 Redis 连接，并合并返回所有关闭错误。

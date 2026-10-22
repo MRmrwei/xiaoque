@@ -29,7 +29,6 @@ export default defineNuxtConfig({
           rel: 'stylesheet',
           href: 'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@500;600;700&display=swap'
         },
-        { rel: 'icon', type: 'image/svg+xml', href: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj4KICA8cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHJ4PSIxMiIgZmlsbD0iIzE0MTUxOCIvPgogIDxwYXRoIGQ9Ik0xMS4yIDI2LjhjLTEuOS0xLjItMi44LTMuMS0yLjQtNS40LjMtMS45IDEuNC0zLjYgMy00LjcgMS44LTEuMyA0LTEuOCA2LjItMS4zIDEuOS40IDMuNCAxLjYgNC4zIDMuMi44IDEuNCAxIDMuMS41IDQuOC0uNiAyLjEtMi4yIDMuNy00LjMgNC40LTIuNC44LTUgLjYtNy4zLS42WiIgZmlsbD0iI0Y2RjJFQSIvPgogIDxjaXJjbGUgY3g9IjI1LjciIGN5PSIxNS4zIiByPSI1LjEiIGZpbGw9IiNGNkYyRUEiLz4KICA8cGF0aCBkPSJNMzAuNSAxNC4yIDM2IDE2bC01LjIgMi4zLjYtMi4xLS45LTJaIiBmaWxsPSIjRTg1MDNBIi8+CiAgPHBhdGggZD0iTTEyLjMgMjUuNmMxLjQtNCA1LTYuNiA5LjMtNi42IDIuNiAwIDQuOCAxIDYuNCAyLjctMy4zLTEtNi44IDAtOS4xIDIuNS0uOSAxLTEuNSAyLjMtMS43IDMuNi0yLjItLjEtNC0uOS00LjktMi4yWiIgZmlsbD0iI0U4NTAzQSIvPgogIDxwYXRoIGQ9Ik0xMS42IDI1LjggNS4yIDMzLjJsMS41LTguNWMxLjQuOCAzLjEgMS4yIDQuOSAxLjFaIiBmaWxsPSIjRjZGMkVBIi8+CiAgPGNpcmNsZSBjeD0iMjcuMiIgY3k9IjE0LjMiIHI9IjEuMDUiIGZpbGw9IiMxNDE1MTgiLz4KPC9zdmc+Cg==' }
       ]
     }
   },
@@ -46,6 +45,21 @@ export default defineNuxtConfig({
   },
   typescript: {
     strict: true
+  },
+  runtimeConfig: {
+    // 服务端 SSR 直接请求 Go 后端。
+    apiBase: process.env.NUXT_API_BASE || 'http://127.0.0.1:8888/api/v1',
+    public: {
+      // 浏览器侧通过 Nitro 代理访问，避免跨域。
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || '/api/backend',
+      // 单文件分享版没有服务端，继续使用内置演示数据。
+      useMockData: share
+    }
+  },
+  routeRules: {
+    '/api/backend/**': {
+      proxy: `${process.env.NUXT_API_TARGET || 'http://127.0.0.1:8888'}/api/v1/**`
+    }
   },
   ...(share
     ? {

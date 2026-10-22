@@ -10,6 +10,7 @@ export type FieldType =
   | 'color'
   | 'image'
   | 'images'
+  | 'media'
   | 'link'
   | 'date'
   | 'repeater'
@@ -41,10 +42,12 @@ export interface BlockField {
   max?: number
   required?: boolean
   default?: unknown
-  /** 图片字段是否开放本地上传（默认只能选内置图形）。 */
+  /** 图片字段是否开放素材库（默认只能选内置图形）。 */
   upload?: boolean
-  /** 图片字段只允许上传，不展示内置图形。 */
+  /** 图片字段只允许从素材库选择，不展示内置图形。 */
   uploadOnly?: boolean
+  /** media 字段的素材类型，默认视频；后续可扩展 file 等类型。 */
+  mediaKind?: 'video' | 'image'
   /** 仅当同级字段等于指定值时显示。 */
   visibleWhen?: FieldCondition
 }
@@ -239,8 +242,9 @@ export const blockSchemas: Record<BlockType, BlockSchema> = {
             help: '仅在内容类型为图片时显示，作为轮播主视觉。',
             visibleWhen: { key: 'mediaType', equals: 'image' }
           }),
-          field('videoUrl', '视频地址', 'text', {
-            help: 'MP4 直链；仅在内容类型为视频时显示。',
+          field('videoUrl', '视频地址', 'media', {
+            mediaKind: 'video',
+            help: '可从素材库上传 / 选择视频，或直接粘贴 MP4 直链；仅在内容类型为视频时显示。',
             visibleWhen: { key: 'mediaType', equals: 'video' }
           }),
           field('videoPoster', '视频封面（可选）', 'image', {
@@ -689,8 +693,7 @@ export const blockSchemas: Record<BlockType, BlockSchema> = {
       field('kicker', '左上角小标题', 'text', { help: '留空则不显示。' }),
       field('mapStyle', '右侧图片', 'image', { options: artOptions, upload: true }),
       field('mapNote', '图片上的坐标文案', 'text', { help: '留空则不显示。' }),
-      field('formKicker', '表单上方小标题', 'text', { help: '留空则不显示。' }),
-      field('replyNote', '回复时效提示', 'text', { help: '留空则不显示。' })
+      field('formKicker', '表单上方小标题', 'text', { help: '留空则不显示。' })
     ]
   },
 
@@ -712,7 +715,10 @@ export const blockSchemas: Record<BlockType, BlockSchema> = {
       field('caption', '说明文字'),
       field('visual', '封面图片', 'image', { options: artOptions, upload: true }),
       field('label', '封面播放标签', 'text', { help: '留空则不显示。' }),
-      field('url', '视频链接')
+      field('url', '视频地址', 'media', {
+        mediaKind: 'video',
+        help: '可从素材库上传 / 选择视频，或直接粘贴 MP4 / WebM 直链。'
+      })
     ]
   },
 

@@ -250,7 +250,7 @@ const fallbackSlide: HeroCarouselSlide = {
   mediaType: 'image',
   media: 'orbit',
   videoUrl: '',
-  eyebrow: '小鹊云',
+  eyebrow: '',
   title: '让每一次表达\n都成为<em>增长</em>。',
   subtitle: '在这里添加你的第一张轮播内容。',
   primaryLabel: '预约演示',

@@ -2,17 +2,14 @@ import type {
   CaseRecord,
   ContentRecord,
   Locale,
-  NavLink,
   NewsRecord,
   PageRecord,
   ProductRecord,
   PublishedPage,
-  SiteCollections,
-  SiteSettings
+  SiteCollections
 } from '~/domain/types'
 import { pages } from '~/data/pages'
 import { contents } from '~/data/content'
-import { settings } from '~/data/settings'
 
 /**
  * Public render data boundary.
@@ -137,18 +134,4 @@ export async function getSiteCollections(locale: Locale): Promise<SiteCollection
     getCases(locale)
   ])
   return { news, products, cases }
-}
-
-export function getSiteSettings(): SiteSettings {
-  return settings
-}
-
-export function getNavLinks(locale: Locale): NavLink[] {
-  return settings.nav
-    .filter((item) => item.visible)
-    .map((item) => ({ label: item[locale], path: item.path }))
-}
-
-export async function getSiteName(locale: Locale): Promise<string> {
-  return settings.siteName[locale]
 }

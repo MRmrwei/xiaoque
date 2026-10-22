@@ -7,19 +7,10 @@
             <BrandMark :size="38" inverse :image="settings.brand.logo" />
             <span class="pv-logo-text">
               <strong>{{ settings.siteName[locale] }}</strong>
-              <span>MAGPIE CLOUD</span>
+              <span>{{ settings.siteName.en }}</span>
             </span>
           </div>
           <p class="pv-footer-tagline">{{ settings.tagline[locale] }}</p>
-
-          <div v-if="footer.showNewsletter" class="pv-newsletter">
-            <p class="pv-newsletter-label">{{ footer.newsletterTitle[locale] }}</p>
-            <p class="pv-newsletter-note">{{ footer.newsletterNote[locale] }}</p>
-            <div class="pv-newsletter-form">
-              <span class="pv-newsletter-input">name@company.com</span>
-              <span class="pv-newsletter-btn"><UiIcon name="arrow" :size="16" /></span>
-            </div>
-          </div>
         </div>
 
         <div class="pv-footer-cols" :class="{ 'is-contactless': !footer.showContact }">
@@ -60,9 +51,6 @@
           <span v-for="link in visibleBottomLinks" :key="link.key" :title="link.path">
             {{ link[locale] }}
           </span>
-        </div>
-        <div v-if="footer.showStatus" class="pv-status">
-          <span class="pv-status-dot" /> {{ footer.statusText[locale] }}
         </div>
       </div>
     </div>
@@ -163,48 +151,6 @@ function visibleLinks(column: FooterColumn): FooterLink[] {
   color: rgba(246, 242, 234, 0.55);
 }
 
-.pv-newsletter {
-  margin-top: 28px;
-  max-width: 320px;
-}
-
-.pv-newsletter-label {
-  color: #f6f2ea;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.pv-newsletter-note {
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: rgba(246, 242, 234, 0.4);
-}
-
-.pv-newsletter-form {
-  margin-top: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid rgba(246, 242, 234, 0.22);
-  padding-bottom: 7px;
-}
-
-.pv-newsletter-input {
-  flex: 1;
-  font-size: 12px;
-  color: rgba(246, 242, 234, 0.3);
-}
-
-.pv-newsletter-btn {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #f6f2ea;
-  color: #141518;
-}
-
 .pv-footer-cols {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -295,21 +241,6 @@ function visibleLinks(column: FooterColumn): FooterLink[] {
 
 .pv-bottom-links span {
   color: rgba(246, 242, 234, 0.48);
-}
-
-.pv-status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: rgba(246, 242, 234, 0.45);
-}
-
-.pv-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #8fbf87;
-  box-shadow: 0 0 0 3px rgba(143, 191, 135, 0.14);
 }
 
 @container (max-width: 1020px) {

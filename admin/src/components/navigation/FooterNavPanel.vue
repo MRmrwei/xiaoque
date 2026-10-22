@@ -5,7 +5,7 @@
         <p class="panel-kicker">FOOTER NAVIGATION</p>
         <h2 class="panel-title">底部导航</h2>
         <p class="panel-sub">
-          编排官网页脚的栏目、链接、订阅区、联系入口与底部版权信息。中英文分开配置，修改后点击右上角「保存设置」，并同步到页面草稿预览。
+          编排官网页脚的栏目、链接、联系入口与底部版权信息。中英文分开配置，修改后点击右上角「保存设置」，并同步到页面草稿预览。
         </p>
       </div>
       <div class="panel-actions">
@@ -148,7 +148,7 @@
           <div class="adm-card-head">
             <div>
               <h3>页脚信息</h3>
-              <p>订阅区、联系入口与版权信息。</p>
+              <p>联系入口与版权信息。</p>
             </div>
           </div>
 
@@ -187,45 +187,6 @@
               <div class="footer-pair">
                 <el-input v-model="settings.address.zh" size="small" placeholder="中文地址" />
                 <el-input v-model="settings.address.en" size="small" placeholder="Address (EN)" />
-              </div>
-            </div>
-
-            <div class="footer-setting-row">
-              <div class="footer-setting-label">
-                <strong>订阅区</strong>
-                <span>页脚左侧的邮件订阅入口</span>
-              </div>
-              <div class="footer-setting-inline">
-                <el-switch v-model="footer.showNewsletter" size="small" />
-                <span class="footer-setting-hint">关闭后整块隐藏</span>
-              </div>
-              <div class="footer-pair" :class="{ 'is-disabled': !footer.showNewsletter }">
-                <el-input
-                  v-model="footer.newsletterTitle.zh"
-                  size="small"
-                  placeholder="订阅标题"
-                  :disabled="!footer.showNewsletter"
-                />
-                <el-input
-                  v-model="footer.newsletterTitle.en"
-                  size="small"
-                  placeholder="Newsletter title"
-                  :disabled="!footer.showNewsletter"
-                />
-              </div>
-              <div class="footer-pair" :class="{ 'is-disabled': !footer.showNewsletter }">
-                <el-input
-                  v-model="footer.newsletterNote.zh"
-                  size="small"
-                  placeholder="订阅说明"
-                  :disabled="!footer.showNewsletter"
-                />
-                <el-input
-                  v-model="footer.newsletterNote.en"
-                  size="small"
-                  placeholder="Newsletter note"
-                  :disabled="!footer.showNewsletter"
-                />
               </div>
             </div>
 
@@ -290,30 +251,6 @@
               <el-input v-model="settings.icp" size="small" placeholder="ICP 备案号" />
             </div>
 
-            <div class="footer-setting-row">
-              <div class="footer-setting-label">
-                <strong>状态提示</strong>
-                <span>页脚右下角的运行状态</span>
-              </div>
-              <div class="footer-setting-inline">
-                <el-switch v-model="footer.showStatus" size="small" />
-                <span class="footer-setting-hint">带绿点的状态文案</span>
-              </div>
-              <div class="footer-pair" :class="{ 'is-disabled': !footer.showStatus }">
-                <el-input
-                  v-model="footer.statusText.zh"
-                  size="small"
-                  placeholder="中文状态"
-                  :disabled="!footer.showStatus"
-                />
-                <el-input
-                  v-model="footer.statusText.en"
-                  size="small"
-                  placeholder="Status text"
-                  :disabled="!footer.showStatus"
-                />
-              </div>
-            </div>
           </div>
         </section>
 

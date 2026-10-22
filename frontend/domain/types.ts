@@ -41,6 +41,8 @@ export interface PublishedPage {
   version: number
   publishedAt: string
   publishedBy: string
+  /** 已发布语言对应的路径，用于 hreflang 与语言切换；未发布语言不出现。 */
+  alternates?: Partial<Record<Locale, string>>
 }
 
 export type ContentType = 'news' | 'product' | 'case'
@@ -166,19 +168,12 @@ export interface FooterCta {
 }
 
 export interface FooterSettings {
-  /** 订阅区（标题 / 说明按语言配置）。 */
-  showNewsletter: boolean
-  newsletterTitle: Record<Locale, string>
-  newsletterNote: Record<Locale, string>
   /** 联系列：邮箱 / 电话 / 地址沿用站点设置，CTA 单独配置。 */
   showContact: boolean
   cta: FooterCta
   /** 底部大字标。 */
   showWordmark: boolean
   wordmark: string
-  /** 系统状态提示。 */
-  showStatus: boolean
-  statusText: Record<Locale, string>
   columns: FooterColumn[]
   bottomLinks: FooterLink[]
 }

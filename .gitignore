@@ -17,6 +17,9 @@ logs/
 *.log
 nohup.out
 
+# 本地媒体上传目录
+service/uploads/
+
 # 本地环境变量与密钥（保留示例文件）
 .env
 .env.*
@@ -48,3 +51,36 @@ cloudflared.txt
 # 本地数据
 dump.rdb
 dumped_hertz_remote_config.json
+materials/
+
+# Docker 部署运行数据（数据库 / Redis / 素材 / 日志）
+deploy/docker/data/mysql/
+deploy/docker/data/redis/
+deploy/docker/data/uploads/
+deploy/docker/data/logs/
+deploy/docker/data/release/
+
+# Docker 部署包：只忽略运行数据与构建产物，保留 compose / README / Nginx 配置
+deploy/docker/xqyun/data/*
+!deploy/docker/xqyun/data/nginx/
+deploy/docker/xqyun/data/nginx/*
+!deploy/docker/xqyun/data/nginx/conf/
+!deploy/docker/xqyun/data/nginx/conf/**
+
+# 一次性上传压缩包（体积大，不提交）
+deploy/docker/xiaoque-docker-upload.tar.gz
+
+# 数据库备份（保留 migration/ 下的迁移 SQL）
+*.sql.gz
+*.sql.bak
+*.dump
+backup-*.sql
+dump-*.sql
+
+# 私钥 / 证书私钥
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*

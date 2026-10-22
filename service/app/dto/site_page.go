@@ -100,9 +100,3 @@ type AdminPagePublishResponse struct {
 	Version     int   `json:"version"`
 	PublishedAt int64 `json:"published_at"`
 }
-
-// AdminPagePreviewTokenResponse 是草稿预览令牌。
-type AdminPagePreviewTokenResponse struct {
-	Token     string `json:"token"`
-	ExpiresAt int64  `json:"expires_at"`
-}

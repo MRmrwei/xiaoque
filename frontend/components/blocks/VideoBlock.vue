@@ -6,10 +6,22 @@
         <span v-if="data.caption" class="mono video-caption">{{ data.caption }}</span>
       </header>
 
+      <video
+        v-if="isDirectVideo"
+        class="video-frame"
+        controls
+        playsinline
+        preload="metadata"
+        :poster="poster || undefined"
+      >
+        <source :src="data.url" />
+      </video>
+
       <component
-        :is="data.url && !preview ? 'a' : 'div'"
-        :href="data.url && !preview ? data.url : undefined"
-        :target="data.url && !preview ? '_blank' : undefined"
+        v-else
+        :is="isLink ? 'a' : 'div'"
+        :href="isLink ? data.url : undefined"
+        :target="isLink ? '_blank' : undefined"
         class="video-frame"
       >
         <BlockImage :src="data.visual" fallback="bloom" />
@@ -28,6 +40,10 @@ import { computed } from 'vue'
 import BlockImage from '~/components/BlockImage.vue'
 import UiIcon from '~/components/UiIcon.vue'
 import type { VideoProps } from '~/domain/blocks'
+import { isCustomImage } from '~/utils/image'
+
+/** 常见直链视频格式；命中后直接用 <video> 播放，不再作为跳转链接。 */
+const VIDEO_FILE_PATTERN = /\.(mp4|webm|ogv|ogg|mov|m4v)(?:[?#].*)?$/i
 
 const props = withDefaults(
   defineProps<{
@@ -38,6 +54,14 @@ const props = withDefaults(
 )
 
 const data = computed(() => props.propsData)
+const url = computed(() => (data.value.url ?? '').trim())
+const isDirectVideo = computed(
+  () => VIDEO_FILE_PATTERN.test(url.value) || url.value.startsWith('data:video/')
+)
+const poster = computed(() =>
+  isCustomImage(data.value.visual) ? data.value.visual : ''
+)
+const isLink = computed(() => !!url.value && !props.preview)
 </script>
 
 <style scoped>
@@ -74,6 +98,12 @@ const data = computed(() => props.propsData)
   border: 1px solid var(--line-soft);
   max-width: 1080px;
   margin-inline: auto;
+  background: var(--ink);
+}
+
+video.video-frame {
+  width: 100%;
+  object-fit: cover;
 }
 
 .video-veil {

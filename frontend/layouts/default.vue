@@ -17,17 +17,34 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import SiteFooter from '~/components/layout/SiteFooter.vue'
 import SiteHeader from '~/components/layout/SiteHeader.vue'
 import ToastHost from '~/components/ToastHost.vue'
-import { getSiteSettings } from '~/services/siteService'
+import { loadSiteChrome, useSiteChrome } from '~/composables/useSiteChrome'
 import { brandStyle } from '~/utils/brand'
+import { DEFAULT_FAVICON, faviconType } from '~/utils/favicon'
 
-const themeStyle = brandStyle(getSiteSettings().brand)
-const themeCss = Object.entries(themeStyle)
-  .map(([key, value]) => `${key}:${value}`)
-  .join(';')
+const { settings } = useSiteChrome()
 
-useHead({
-  htmlAttrs: {
-    style: themeCss
+// 站点配置决定导航、Logo 与品牌色，先取回再渲染头部 / 页脚。
+await loadSiteChrome()
+
+const themeCss = computed(() =>
+  Object.entries(brandStyle(settings.value.brand))
+    .map(([key, value]) => `${key}:${value}`)
+    .join(';')
+)
+
+const faviconHref = computed(() => settings.value.brand.logo || DEFAULT_FAVICON)
+
+useHead(() => {
+  const href = faviconHref.value
+  const type = faviconType(href)
+  return {
+    htmlAttrs: {
+      style: themeCss.value
+    },
+    link: [
+      { rel: 'icon', ...(type ? { type } : {}), href },
+      { rel: 'apple-touch-icon', href }
+    ]
   }
 })
 

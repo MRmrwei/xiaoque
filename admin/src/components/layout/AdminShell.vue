@@ -11,6 +11,15 @@
       </nav>
       <p class="side-note">页面内容 · 顶部导航 · 底部导航 · 站点配置</p>
 
+      <p class="side-label">资源</p>
+      <nav class="side-nav">
+        <router-link to="/media" class="side-link" :class="{ active: isMediaActive }">
+          <el-icon><Picture /></el-icon>
+          <span>素材管理</span>
+        </router-link>
+      </nav>
+      <p class="side-note">视频 · 图片 · 素材库</p>
+
       <p class="side-label">线索</p>
       <nav class="side-nav">
         <router-link
@@ -20,7 +29,13 @@
         >
           <el-icon><Message /></el-icon>
           <span>表单留言</span>
-          <span class="side-count">{{ pagesStore.newSubmissionCount }}</span>
+          <span
+            v-if="newSubmissionBadge"
+            class="side-badge"
+            :title="`${pagesStore.newSubmissionCount} 条待处理留言`"
+          >
+            {{ newSubmissionBadge }}
+          </span>
         </router-link>
       </nav>
       <p class="side-note">联系表单提交 · 跟进状态</p>
@@ -46,10 +61,10 @@
           <span>/</span>
           <strong>{{ route.meta.title || '站点编排' }}</strong>
           <el-tag v-if="pagesStore.loadError" type="danger" size="small" effect="plain">
-            后端连接异常
+            数据加载失败
           </el-tag>
           <el-tag v-else-if="pagesStore.storageError" type="danger" size="small" effect="plain">
-            存储异常
+            设置未保存
           </el-tag>
         </div>
         <div class="top-user">
@@ -78,7 +93,7 @@
     <el-alert
       v-if="pagesStore.loadError"
       class="storage-alert"
-      :title="`站点数据加载失败：${pagesStore.loadError}`"
+      title="站点数据加载失败，请刷新页面重试。"
       type="error"
       :closable="false"
       show-icon
@@ -95,10 +110,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Message, Setting, SwitchButton, User } from '@element-plus/icons-vue'
+import {
+  Document,
+  Message,
+  Picture,
+  Setting,
+  SwitchButton,
+  User
+} from '@element-plus/icons-vue'
 import { usePagesStore } from '@/stores/pages'
 import { logout, profileRef, sessionRef } from '@/services/auth'
 
@@ -117,6 +139,29 @@ const isPagesActive = computed(
 const isSubmissionsActive = computed(
   () => route.path === '/submissions' || route.path.startsWith('/submissions/')
 )
+const isMediaActive = computed(
+  () => route.path === '/media' || route.path.startsWith('/media/')
+)
+
+const newSubmissionBadge = computed(() => {
+  const count = pagesStore.newSubmissionCount
+  if (count <= 0) return ''
+  return count > 99 ? '99+' : String(count)
+})
+
+let statsTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  void pagesStore.refreshSubmissionStats()
+  // 定时刷新待处理数量，停留在后台也能看到新留言红点。
+  statsTimer = setInterval(() => {
+    void pagesStore.refreshSubmissionStats()
+  }, 60_000)
+})
+
+onBeforeUnmount(() => {
+  if (statsTimer) clearInterval(statsTimer)
+})
 const isSettingsActive = computed(
   () => route.path === '/settings' || route.path.startsWith('/settings/')
 )

@@ -18,12 +18,30 @@ import (
 
 // Config 对应 config.yaml；密码字段不参与 YAML 解析，只从环境变量读取。
 type Config struct {
-	App    AppConfig    `yaml:"app"`
-	Server ServerConfig `yaml:"server"`
-	MySQL  MySQLConfig  `yaml:"mysql"`
-	Redis  RedisConfig  `yaml:"redis"`
-	JWT    JWTConfig    `yaml:"jwt"`
-	Log    LogConfig    `yaml:"log"`
+	App         AppConfig         `yaml:"app"`
+	Server      ServerConfig      `yaml:"server"`
+	MySQL       MySQLConfig       `yaml:"mysql"`
+	Redis       RedisConfig       `yaml:"redis"`
+	JWT         JWTConfig         `yaml:"jwt"`
+	RenderCache RenderCacheConfig `yaml:"render_cache"`
+	Upload      UploadConfig      `yaml:"upload"`
+	Log         LogConfig         `yaml:"log"`
+}
+
+// UploadConfig 描述本地媒体存储（当前用于视频素材）。
+type UploadConfig struct {
+	// Provider 是存储实现；当前支持 local，后续可扩展 oss / cos / s3。
+	Provider string `yaml:"provider"`
+	// Dir 是文件保存目录，相对路径基于服务启动目录。
+	Dir string `yaml:"dir"`
+	// URLPrefix 是静态访问路径前缀。
+	URLPrefix string `yaml:"url_prefix"`
+	// PublicBaseURL 是拼接素材完整 URL 的站点地址，生产环境填 CDN / 域名。
+	PublicBaseURL string `yaml:"public_base_url"`
+	// MaxVideoMB 是单个视频大小上限。
+	MaxVideoMB int `yaml:"max_video_mb"`
+	// MaxImageMB 是单张图片大小上限。
+	MaxImageMB int `yaml:"max_image_mb"`
 }
 
 type AppConfig struct {
@@ -90,6 +108,13 @@ type JWTClientConfig struct {
 	TokenType  string `yaml:"token_type"`
 	AccessTTL  string `yaml:"access_ttl"`
 	RefreshTTL string `yaml:"refresh_ttl"`
+}
+
+// RenderCacheConfig 描述前台渲染数据的 Redis 缓存。
+// 缓存内容：页面分片（locale + path）、导航分片、站点配置分片。
+type RenderCacheConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	TTL     string `yaml:"ttl"`
 }
 
 // LogConfig 描述日志级别与文件轮转参数。
@@ -201,6 +226,27 @@ func (c *Config) setDefaults() {
 		frontend.RefreshTTL = "720h"
 	}
 	c.JWT.Clients["frontend"] = frontend
+	if c.RenderCache.TTL == "" {
+		c.RenderCache.TTL = "10m"
+	}
+	if c.Upload.Provider == "" {
+		c.Upload.Provider = "local"
+	}
+	if c.Upload.Dir == "" {
+		c.Upload.Dir = "uploads"
+	}
+	if c.Upload.URLPrefix == "" {
+		c.Upload.URLPrefix = "/uploads"
+	}
+	if c.Upload.PublicBaseURL == "" {
+		c.Upload.PublicBaseURL = "http://127.0.0.1:8888"
+	}
+	if c.Upload.MaxVideoMB <= 0 {
+		c.Upload.MaxVideoMB = 200
+	}
+	if c.Upload.MaxImageMB <= 0 {
+		c.Upload.MaxImageMB = 10
+	}
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
 	}
@@ -266,6 +312,22 @@ func (c *Config) applyEnv() error {
 		setString(&client.AccessTTL, prefix+"_ACCESS_TTL")
 		setString(&client.RefreshTTL, prefix+"_REFRESH_TTL")
 		c.JWT.Clients[name] = client
+	}
+
+	if err := setBool(&c.RenderCache.Enabled, "RENDER_CACHE_ENABLED"); err != nil {
+		return err
+	}
+	setString(&c.RenderCache.TTL, "RENDER_CACHE_TTL")
+
+	setString(&c.Upload.Provider, "UPLOAD_PROVIDER")
+	setString(&c.Upload.Dir, "UPLOAD_DIR")
+	setString(&c.Upload.URLPrefix, "UPLOAD_URL_PREFIX")
+	setString(&c.Upload.PublicBaseURL, "UPLOAD_PUBLIC_BASE_URL")
+	if err := setInt(&c.Upload.MaxVideoMB, "UPLOAD_MAX_VIDEO_MB"); err != nil {
+		return err
+	}
+	if err := setInt(&c.Upload.MaxImageMB, "UPLOAD_MAX_IMAGE_MB"); err != nil {
+		return err
 	}
 
 	setString(&c.Log.Level, "LOG_LEVEL")
@@ -342,6 +404,18 @@ func (c *Config) ApplicationConfig() (application.Config, error) {
 		dsn = c.MySQL.dsn()
 	}
 
+	renderCache := application.RenderCacheConfig{Enabled: c.RenderCache.Enabled}
+	if renderCache.Enabled {
+		ttl, err := parseDuration(c.RenderCache.TTL)
+		if err != nil {
+			return application.Config{}, fmt.Errorf("config: render_cache.ttl: %w", err)
+		}
+		if ttl <= 0 {
+			return application.Config{}, fmt.Errorf("config: render_cache.ttl 必须大于 0")
+		}
+		renderCache.TTL = ttl
+	}
+
 	return application.Config{
 		DB: application.DBConfig{
 			DSN:             dsn,
@@ -367,6 +441,15 @@ func (c *Config) ApplicationConfig() (application.Config, error) {
 				Secure:   c.JWT.Cookie.Secure,
 				SameSite: c.JWT.Cookie.SameSite,
 			},
+		},
+		RenderCache: renderCache,
+		Upload: application.UploadConfig{
+			Provider:      c.Upload.Provider,
+			Dir:           c.Upload.Dir,
+			URLPrefix:     strings.TrimRight(c.Upload.URLPrefix, "/"),
+			PublicBaseURL: strings.TrimRight(c.Upload.PublicBaseURL, "/"),
+			MaxVideoBytes: int64(c.Upload.MaxVideoMB) << 20,
+			MaxImageBytes: int64(c.Upload.MaxImageMB) << 20,
 		},
 	}, nil
 }

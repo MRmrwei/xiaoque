@@ -1,0 +1,160 @@
+name: xiaoque
+
+# 方式三：不构建任何镜像，直接用官方镜像挂载 data/release 下的构建产物。
+# 需要提前准备好：
+#   data/release/admin/                  管理后台静态文件
+#   data/release/frontend/.output/       官网 Nuxt SSR 产物
+#   data/release/backend/xqyun           Linux 可执行文件（chmod +x）
+#   data/release/backend/config.yaml
+#   data/nginx/conf/default.conf
+#   ./init.sql、./migration/
+#
+# 启动：docker compose -f docker-compose.artifacts.yml up -d
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: xqyun
+      MYSQL_USER: xqyun
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    image: migrate/migrate:v4.18.3
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_USERNAME: xqyun
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./migration:/migrations:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        exec migrate -path=/migrations \
+          -database "mysql://$${MYSQL_USERNAME}:$${MYSQL_PASSWORD}@tcp(mysql:3306)/xqyun" up
+
+  backend:
+    image: alpine:3.22
+    restart: unless-stopped
+    working_dir: /app
+    command: ["/app/xqyun"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: production
+      SERVER_ADDR: ":8888"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: xqyun
+      MYSQL_USERNAME: xqyun
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_ENABLED: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_COOKIE_SECURE: ${JWT_COOKIE_SECURE:-false}
+      UPLOAD_PROVIDER: local
+      UPLOAD_DIR: /app/uploads
+      UPLOAD_URL_PREFIX: /uploads
+      UPLOAD_PUBLIC_BASE_URL: ${UPLOAD_PUBLIC_BASE_URL}
+      LOG_DIR: /app/logs
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data/release/backend/xqyun:/app/xqyun:ro
+      - ./data/release/backend/config.yaml:/app/config.yaml:ro
+      - ./data/uploads:/app/uploads
+      - ./data/logs:/app/logs
+    ports:
+      - "${BACKEND_PORT:-8888}:8888"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8888/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    image: node:22-alpine
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "/app/.output/server/index.mjs"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      NUXT_API_BASE: http://backend:8888/api/v1
+      NUXT_PUBLIC_API_BASE: /api/backend
+      NUXT_API_TARGET: http://backend:8888
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data/release/frontend/.output:/app/.output:ro
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data/release/admin:/usr/share/nginx/html/admin:ro
+      - ./data/nginx/conf:/etc/nginx/conf.d:ro
+    ports:
+      - "${HTTP_PORT:-80}:80"

@@ -7,30 +7,10 @@
             <BrandMark :size="38" inverse :image="settings.brand.logo" />
             <span class="footer-logo-text">
               <strong>{{ settings.siteName[locale] }}</strong>
-              <span>MAGPIE CLOUD</span>
+              <span>{{ settings.siteName.en }}</span>
             </span>
           </NuxtLink>
           <p class="footer-tagline">{{ settings.tagline[locale] }}</p>
-
-          <div v-if="footer.showNewsletter" class="newsletter">
-            <p class="newsletter-label">{{ footer.newsletterTitle[locale] }}</p>
-            <p class="newsletter-note">{{ footer.newsletterNote[locale] }}</p>
-            <form class="newsletter-form" @submit.prevent="subscribe">
-              <input
-                v-model="email"
-                type="email"
-                :placeholder="t('footer.newsletterPlaceholder')"
-                aria-label="Email"
-                required
-              />
-              <button type="submit" :aria-label="t('footer.subscribe')">
-                <UiIcon name="arrow" :size="17" />
-              </button>
-            </form>
-            <p v-if="subscribed" class="newsletter-success">
-              <UiIcon name="check" :size="13" /> {{ t('footer.subscribed') }}
-            </p>
-          </div>
         </div>
 
         <div class="footer-cols" :class="{ 'is-contactless': !footer.showContact }">
@@ -78,9 +58,6 @@
             {{ link[locale] }}
           </BlockLink>
         </div>
-        <div v-if="footer.showStatus" class="footer-status">
-          <span class="status-dot" /> {{ footer.statusText[locale] }}
-        </div>
       </div>
     </div>
   </footer>
@@ -91,7 +68,6 @@ import { computed } from 'vue'
 import BlockLink from '~/components/BlockLink.vue'
 import BrandMark from '~/components/BrandMark.vue'
 import UiIcon from '~/components/UiIcon.vue'
-import { useNewsletter } from '~/composables/useNewsletter'
 import { useSiteChrome } from '~/composables/useSiteChrome'
 import { useUiText } from '~/composables/useUiText'
 import type { FooterColumn, FooterLink } from '~/domain/types'
@@ -99,9 +75,8 @@ import type { FooterColumn, FooterLink } from '~/domain/types'
 const localePath = useLocalePath()
 const { t, locale } = useUiText()
 const { settings } = useSiteChrome()
-const { email, subscribed, subscribe } = useNewsletter()
 
-const footer = computed(() => settings.footer)
+const footer = computed(() => settings.value.footer)
 const visibleColumns = computed(() => footer.value.columns.filter((column) => column.visible))
 const visibleBottomLinks = computed(() =>
   footer.value.bottomLinks.filter((link) => link.visible)
@@ -163,9 +138,10 @@ function visibleLinks(column: FooterColumn): FooterLink[] {
 
 .footer-logo-text span {
   font-family: var(--font-mono);
-  font-size: 7.5px;
-  letter-spacing: 0.2em;
-  color: rgba(246, 242, 234, 0.4);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(246, 242, 234, 0.45);
 }
 
 .footer-tagline {
@@ -174,76 +150,6 @@ function visibleLinks(column: FooterColumn): FooterLink[] {
   line-height: 1.8;
   max-width: 36ch;
   color: rgba(246, 242, 234, 0.55);
-}
-
-.newsletter {
-  margin-top: 32px;
-  max-width: 330px;
-}
-
-.newsletter-label {
-  color: var(--paper);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.newsletter-note {
-  margin-top: 4px;
-  font-size: 12px;
-  color: rgba(246, 242, 234, 0.4);
-}
-
-.newsletter-form {
-  margin-top: 14px;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid rgba(246, 242, 234, 0.22);
-  transition: border-color 0.2s ease;
-}
-
-.newsletter-form:focus-within {
-  border-color: var(--paper);
-}
-
-.newsletter-form input {
-  flex: 1;
-  background: transparent;
-  border: 0;
-  outline: none;
-  padding: 10px 0;
-  color: var(--paper);
-  font-size: 13px;
-}
-
-.newsletter-form input::placeholder {
-  color: rgba(246, 242, 234, 0.3);
-}
-
-.newsletter-form button {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: var(--paper);
-  color: var(--ink);
-  transition: transform 0.3s var(--ease), background 0.2s ease;
-}
-
-.newsletter-form button:hover {
-  transform: translateX(2px);
-  background: var(--accent);
-  color: #fff;
-}
-
-.newsletter-success {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  font-size: 12px;
-  color: #cfe0c9;
 }
 
 .footer-cols {
@@ -350,21 +256,6 @@ function visibleLinks(column: FooterColumn): FooterLink[] {
 
 .footer-bottom-links a:hover {
   color: var(--paper);
-}
-
-.footer-status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: rgba(246, 242, 234, 0.45);
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #8fbf87;
-  box-shadow: 0 0 0 3px rgba(143, 191, 135, 0.14);
 }
 
 @media (max-width: 1020px) {

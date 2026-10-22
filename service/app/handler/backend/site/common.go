@@ -13,33 +13,39 @@ import (
 	"suki/xqyun/app/core/response"
 	menurepository "suki/xqyun/app/repository/menu"
 	pagerepository "suki/xqyun/app/repository/page"
+	renderrepository "suki/xqyun/app/repository/render"
 	settingrepository "suki/xqyun/app/repository/setting"
 	userrepository "suki/xqyun/app/repository/user"
 	siteservice "suki/xqyun/app/services/site"
 	"suki/xqyun/middleware"
 )
 
+// newRenderCache 按配置创建前台渲染缓存；未启用时返回不读写 Redis 的空实现。
+func newRenderCache(app application.Application) *renderrepository.Cache {
+	cfg := app.RenderCache()
+	if !cfg.Enabled {
+		return renderrepository.New(nil, 0)
+	}
+	return renderrepository.New(app.Redis(), cfg.TTL)
+}
+
 // newPageService 按请求组装页面用例服务，避免在路由注册阶段提前连接数据层。
 func newPageService(app application.Application) *siteservice.PageService {
-	var previewSecret []byte
-	if client, ok := app.JWT().Client("admin"); ok {
-		previewSecret = client.Secret
-	}
 	return siteservice.NewPageService(
 		pagerepository.New(app.DB()),
 		userrepository.New(app.DB()),
-		previewSecret,
+		newRenderCache(app),
 	)
 }
 
 // newMenuService 按请求组装导航菜单用例服务。
 func newMenuService(app application.Application) *siteservice.MenuService {
-	return siteservice.NewMenuService(menurepository.New(app.DB()))
+	return siteservice.NewMenuService(menurepository.New(app.DB()), newRenderCache(app))
 }
 
 // newSettingService 按请求组装站点配置用例服务。
 func newSettingService(app application.Application) *siteservice.SettingService {
-	return siteservice.NewSettingService(settingrepository.New(app.DB()))
+	return siteservice.NewSettingService(settingrepository.New(app.DB()), newRenderCache(app))
 }
 
 // adminID 从 Access Token claims 读取当前管理员 ID。

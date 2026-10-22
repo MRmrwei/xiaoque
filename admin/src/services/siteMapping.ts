@@ -220,15 +220,10 @@ export function siteSettingsPayload(settings: SiteSettings): Record<string, unkn
     header: settings.header,
     // 栏目和底部链接由菜单表负责，避免两处都能改链接。
     footer: {
-      showNewsletter: settings.footer.showNewsletter,
-      newsletterTitle: settings.footer.newsletterTitle,
-      newsletterNote: settings.footer.newsletterNote,
       showContact: settings.footer.showContact,
       cta: settings.footer.cta,
       showWordmark: settings.footer.showWordmark,
-      wordmark: settings.footer.wordmark,
-      showStatus: settings.footer.showStatus,
-      statusText: settings.footer.statusText
+      wordmark: settings.footer.wordmark
     },
     copyright: settings.copyright,
     icp: settings.icp,

@@ -12,7 +12,9 @@
       </div>
       <div class="adm-actions">
         <el-button @click="restoreProfile">恢复默认资料</el-button>
-        <el-button type="primary" @click="submitProfile">保存资料</el-button>
+        <el-button type="primary" :loading="savingProfile" @click="submitProfile">
+          保存资料
+        </el-button>
       </div>
     </header>
 
@@ -90,8 +92,7 @@
           </label>
 
           <p class="account-note">
-            登录已接 Go API；资料修改仍保存在 <span class="mono">localStorage</span>，尚未写回
-            <span class="mono">xqyun_users</span>。
+            保存后右上角的名称与头像会同步更新，下次登录仍然生效。
           </p>
         </div>
       </section>
@@ -100,7 +101,7 @@
         <div class="adm-card-head">
           <div>
             <h3>修改密码</h3>
-            <p>当前为本地演示改密，不会修改 Go API 的登录密码。</p>
+            <p>修改成功后，当前账号在所有设备的登录状态都会失效，需要重新登录。</p>
           </div>
         </div>
 
@@ -147,7 +148,7 @@
           </div>
 
           <p class="account-note">
-            登录已接 Go API；改密接口尚未接入，当前修改仅保存在本地演示数据，不会修改后端密码。
+            修改成功后，该账号在所有设备都需要使用新密码重新登录。
           </p>
         </div>
       </section>
@@ -184,6 +185,7 @@ const passwordForm = reactive({
   next: '',
   confirm: ''
 })
+const savingProfile = ref(false)
 const savingPassword = ref(false)
 const avatarInput = ref<HTMLInputElement | null>(null)
 const avatarLoading = ref(false)
@@ -220,7 +222,9 @@ async function onAvatarPick(event: Event): Promise<void> {
   }
 }
 
-function submitProfile(): void {
+async function submitProfile(): Promise<void> {
+  if (savingProfile.value) return
+
   const name = profileForm.name.trim()
   if (!name) {
     ElMessage.error('请输入显示名称')
@@ -239,8 +243,9 @@ function submitProfile(): void {
     return
   }
 
+  savingProfile.value = true
   try {
-    const saved = saveProfile({ name, email, mobile, avatar: profileForm.avatar })
+    const saved = await saveProfile({ name, email, mobile, avatar: profileForm.avatar })
     currentProfile.value = saved
     Object.assign(profileForm, {
       name: saved.name,
@@ -251,6 +256,8 @@ function submitProfile(): void {
     ElMessage.success('管理员资料已保存')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '资料保存失败')
+  } finally {
+    savingProfile.value = false
   }
 }
 
@@ -306,7 +313,9 @@ async function submitPassword(): Promise<void> {
       return
     }
     Object.assign(passwordForm, { current: '', next: '', confirm: '' })
-    ElMessage.success('密码已修改，下次登录请使用新密码')
+    ElMessage.success(result.message)
+    // 服务端已吊销全部刷新令牌，本地会话也已清除，回到登录页重新登录。
+    window.location.hash = '#/login'
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '密码修改失败')
   } finally {

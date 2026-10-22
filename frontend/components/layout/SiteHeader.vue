@@ -34,7 +34,7 @@
           <BrandMark :size="34" :image="settings.brand.logo" />
           <span class="brand-text">
             <span class="brand-name">{{ siteName }}</span>
-            <span class="brand-sub">MAGPIE CLOUD</span>
+            <span class="brand-sub">{{ settings.siteName.en }}</span>
           </span>
         </NuxtLink>
 
@@ -130,8 +130,8 @@ const { t, locale } = useUiText()
 const { nav, siteName, settings } = useSiteChrome()
 const { switchTo: switchLocale } = useLocaleSwitch()
 
-const announcement = computed(() => settings.header.announcement)
-const visibleCtas = computed(() => settings.header.ctas.filter((cta) => cta.visible))
+const announcement = computed(() => settings.value.header.announcement)
+const visibleCtas = computed(() => settings.value.header.ctas.filter((cta) => cta.visible))
 const primaryCta = computed(() =>
   visibleCtas.value.find((cta) => cta.variant === 'primary')
 )
@@ -325,8 +325,9 @@ onBeforeUnmount(() => {
 
 .brand-sub {
   font-family: var(--font-mono);
-  font-size: 7.5px;
-  letter-spacing: 0.19em;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--muted-2);
 }
 

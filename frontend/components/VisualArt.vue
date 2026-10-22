@@ -133,7 +133,7 @@
         letter-spacing="3"
         opacity=".65"
       >
-        MAGPIE / 2026
+        {{ brandLabel }}
       </text>
       <circle cx="70" cy="392" r="4" :fill="c.accent" />
     </svg>
@@ -183,6 +183,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useSiteChrome } from '~/composables/useSiteChrome'
 
 const props = withDefaults(
   defineProps<{
@@ -191,6 +192,12 @@ const props = withDefaults(
   }>(),
   { variant: 'orbit', tone: '' }
 )
+
+const { settings } = useSiteChrome()
+const brandLabel = computed(() => {
+  const name = settings.value.siteName.en || settings.value.siteName.zh || 'Magpie'
+  return `${name.toUpperCase()} / ${new Date().getFullYear()}`
+})
 
 interface Tone {
   bg: string

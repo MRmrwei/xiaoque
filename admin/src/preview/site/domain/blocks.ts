@@ -226,7 +226,6 @@ export interface ContactFormProps {
   /** 图片上的坐标文案，留空则不显示。 */
   mapNote?: string
   formKicker?: string
-  replyNote?: string
 }
 
 export interface RichTextProps {

@@ -48,6 +48,26 @@ jwt:
       access_ttl: "30m"
       refresh_ttl: "720h"
 
+render_cache:
+  # 前台渲染数据（页面 / 导航 / 站点配置）的 Redis 缓存。
+  # 发布、下架、删除页面以及保存导航 / 站点配置时会主动删除对应缓存；
+  # ttl 只是失效逻辑漏删时的兜底。
+  enabled: true
+  ttl: "10m"
+
+upload:
+  # 素材存储实现：当前支持 local（本地磁盘）。
+  # 后续可扩展 oss / cos / s3，在 repository/media.NewStorage 注册。
+  provider: "local"
+  # 视频素材保存到本地目录；静态访问路径为 /uploads。
+  # 生产环境建议把目录挂到持久盘，或替换为对象存储。
+  dir: "uploads"
+  url_prefix: "/uploads"
+  # 拼接素材完整 URL 的站点地址；生产环境填官网域名 / CDN。
+  public_base_url: "http://127.0.0.1:8888"
+  max_video_mb: 200
+  max_image_mb: 10
+
 log:
   level: "info"
   # 开发环境（APP_ENV != production）输出到控制台；生产环境写入 logs/app.log。

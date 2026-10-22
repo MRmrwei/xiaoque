@@ -237,7 +237,7 @@
 
         <div class="site-preview-note">
           <span class="mono">LIVE</span>
-          <p>修改 Logo、主色与背景色会立即反映在预览中；点击「保存设置」后写入 Go 后端。</p>
+          <p>修改 Logo、主色与背景色会立即反映在预览中；点击「保存设置」后应用到官网。</p>
         </div>
       </aside>
     </div>

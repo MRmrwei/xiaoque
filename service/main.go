@@ -22,7 +22,12 @@ func main() {
 		}
 	}()
 
-	h := server.Default(server.WithHostPorts(b.Config.Server.Addr))
+	// 视频上传需要放宽请求体上限，额外留 8MB 给 multipart 头与其他字段。
+	maxBodySize := (b.Config.Upload.MaxVideoMB + 8) << 20
+	h := server.Default(
+		server.WithHostPorts(b.Config.Server.Addr),
+		server.WithMaxRequestBodySize(maxBodySize),
+	)
 	register(h, b.App)
 
 	// Spin 内部已处理 SIGINT / SIGTERM 并执行优雅关闭，返回后再释放 Application。

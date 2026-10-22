@@ -162,7 +162,7 @@
           <div class="detail-hero-text">
             <strong>{{ active.name }}</strong>
             <span>{{ active.company || '未填写公司' }}</span>
-            <span class="detail-email">{{ active.email }}</span>
+            <span v-if="active.email" class="detail-email">{{ active.email }}</span>
           </div>
           <span class="sub-status" :class="`sub-status--${statusMeta(active.status).tone}`">
             <i />
@@ -180,7 +180,10 @@
           <dl class="detail-grid">
             <div>
               <dt>邮箱</dt>
-              <dd><a :href="`mailto:${active.email}`">{{ active.email }}</a></dd>
+              <dd>
+                <a v-if="active.email" :href="`mailto:${active.email}`">{{ active.email }}</a>
+                <span v-else>—</span>
+              </dd>
             </div>
             <div>
               <dt>电话</dt>
@@ -207,20 +210,6 @@
             <div>
               <dt>最近处理</dt>
               <dd>{{ formatFull(active.updatedAt) }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div class="detail-section">
-          <p class="detail-label">技术信息</p>
-          <dl class="detail-grid">
-            <div>
-              <dt>IP</dt>
-              <dd class="mono">{{ active.ip }}</dd>
-            </div>
-            <div class="detail-grid-full">
-              <dt>User Agent</dt>
-              <dd class="ua">{{ active.userAgent }}</dd>
             </div>
           </dl>
         </div>
@@ -715,10 +704,6 @@ async function exportCsv(): Promise<void> {
   min-width: 0;
 }
 
-.detail-grid-full {
-  grid-column: 1 / -1;
-}
-
 .detail-grid dt {
   font-size: 11.5px;
   color: var(--adm-muted-2);
@@ -737,16 +722,6 @@ async function exportCsv(): Promise<void> {
   color: var(--adm-accent-deep);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.detail-grid .mono {
-  font-size: 11.5px;
-  color: var(--adm-muted);
-}
-
-.detail-grid .ua {
-  font-size: 11.5px;
-  color: var(--adm-muted);
 }
 
 .detail-actions {

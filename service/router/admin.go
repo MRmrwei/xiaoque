@@ -5,6 +5,7 @@ import (
 	"suki/xqyun/middleware"
 
 	"suki/xqyun/app/core/application"
+	mediahandler "suki/xqyun/app/handler/backend/media"
 	sitehandler "suki/xqyun/app/handler/backend/site"
 	submissionhandler "suki/xqyun/app/handler/backend/submission"
 	userhandler "suki/xqyun/app/handler/backend/user"
@@ -31,6 +32,11 @@ func AdminRouters(
 	authorized := r.Group("")
 	authorized.Use(middleware.NewAdminAuth(app).Handle)
 
+	// 当前管理员：资料与密码
+	users := userhandler.NewUserController(app)
+	authorized.PUT("/user/profile", users.UpdateProfile)
+	authorized.PUT("/user/password", users.ChangePassword)
+
 	// 站点编排：页面内容
 	pages := sitehandler.NewPageController(app)
 	authorized.GET("/pages", pages.List)
@@ -41,7 +47,6 @@ func AdminRouters(
 	authorized.POST("/pages/:id/translate", pages.Translate)
 	authorized.POST("/pages/:id/publish", pages.Publish)
 	authorized.POST("/pages/:id/unpublish", pages.Unpublish)
-	authorized.POST("/pages/:id/preview-token", pages.CreatePreviewToken)
 
 	// 站点编排：顶部导航 / 底部导航 / 页脚底部链接
 	menus := sitehandler.NewMenuController(app)
@@ -53,6 +58,15 @@ func AdminRouters(
 	settings := sitehandler.NewSettingController(app)
 	authorized.GET("/settings", settings.Get)
 	authorized.PUT("/settings", settings.Save)
+
+	// 媒体素材：当前用于视频素材库
+	mediaItems := mediahandler.NewController(app)
+	authorized.GET("/media", mediaItems.List)
+	authorized.DELETE("/media", mediaItems.BatchDelete)
+	authorized.POST("/media/upload", mediaItems.Upload)
+	authorized.GET("/media/:id", mediaItems.Detail)
+	authorized.PUT("/media/:id", mediaItems.Update)
+	authorized.DELETE("/media/:id", mediaItems.Delete)
 
 	// 线索：表单留言
 	submissions := submissionhandler.NewController(app)

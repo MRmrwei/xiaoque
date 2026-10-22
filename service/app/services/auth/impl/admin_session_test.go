@@ -46,6 +46,22 @@ func (f *fakeUsers) UpdateLoginState(context.Context, uint64, int64, *string) er
 	return nil
 }
 
+func (f *fakeUsers) UpdateProfile(
+	context.Context,
+	uint64,
+	string,
+	*string,
+	*string,
+	*string,
+	int64,
+) error {
+	return nil
+}
+
+func (f *fakeUsers) UpdatePassword(context.Context, uint64, string, int64) error {
+	return nil
+}
+
 // fakeSessions 用 map 模拟 Redis：删除旧 key 即代表令牌已失效。
 type fakeSessions struct {
 	tokens map[string]sessionrepository.Token
@@ -97,6 +113,15 @@ func (f *fakeSessions) Rotate(
 
 func (f *fakeSessions) Revoke(_ context.Context, tokenHash, tokenType string) error {
 	delete(f.tokens, sessionKey(tokenType, tokenHash))
+	return nil
+}
+
+func (f *fakeSessions) RevokeByUser(_ context.Context, userID uint64, tokenType string) error {
+	for key, token := range f.tokens {
+		if token.UserID == userID && token.TokenType == tokenType {
+			delete(f.tokens, key)
+		}
+	}
 	return nil
 }
 

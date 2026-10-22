@@ -84,4 +84,7 @@ export interface PreviewUpdateMessage {
   locale: 'zh' | 'en'
   collections: import('~/domain/types').SiteCollections
   settings: import('~/domain/types').SiteSettings
+  /** 点击左侧区块时定位到的区块 ID；token 用于区分同一区块的重复点击。 */
+  focusBlockId?: string
+  focusToken?: number
 }

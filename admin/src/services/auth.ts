@@ -1,17 +1,19 @@
 /**
- * 管理后台登录与本地演示账号资料。
+ * 管理后台登录与当前管理员资料。
  *
- * 登录 / 刷新令牌 / 退出登录已接 Go API：
+ * 已接 Go API：
  * - POST /api/v1/admin/auth/login
  * - POST /api/v1/admin/auth/refresh（HttpOnly Cookie 静默续期）
  * - POST /api/v1/admin/auth/logout
+ * - PUT  /api/v1/admin/user/profile
+ * - PUT  /api/v1/admin/user/password
  *
  * Access Token 保存在 localStorage；Refresh Token 由后端写入 HttpOnly Cookie，前端不可读取。
- * 管理员资料与改密接口尚未接入，仍保存在 localStorage，仅用于演示。
  */
 import { ref } from 'vue'
 import type { AdminLoginResponse, AdminProfile, AdminUser } from '@/types/admin'
 import { ApiError, api, configureApiAuth } from '@/services/api'
+import { changeAdminPassword, updateProfile } from '@/services/userApi'
 
 export interface AuthSession {
   username: string
@@ -28,26 +30,14 @@ export interface ChangePasswordResult {
   message: string
 }
 
-interface StoredPassword {
-  algorithm: 'PBKDF2-SHA256'
-  iterations: number
-  salt: string
-  hash: string
-  updatedAt: string
-}
-
-/** 本地演示账号资料；登录接口已改用后端账号，这里仅供账号页默认值使用。 */
+/** 账号页「恢复默认资料」使用的占位值；登录账号仍以 Go 后端为准。 */
 export const demoCredentials = {
   username: 'admin',
-  password: '123456',
   name: '小阙'
 } as const
 
 export const AUTH_STORAGE_KEY = 'xiaoque-admin-auth-v1'
-export const PROFILE_STORAGE_KEY = 'xiaoque-admin-profile-v1'
-export const PASSWORD_STORAGE_KEY = 'xiaoque-admin-password-v1'
 
-const PASSWORD_ITERATIONS = 100_000
 const MIN_PASSWORD_CHARS = 8
 const MAX_PASSWORD_BYTES = 72
 
@@ -61,7 +51,6 @@ const DEFAULT_PROFILE: AdminProfile = {
 
 let memorySession: AuthSession | null = null
 let memoryProfile: AdminProfile | null = null
-let memoryPassword: StoredPassword | null = null
 
 function readStorage<T>(key: string): T | null {
   try {
@@ -123,44 +112,23 @@ function readSession(): AuthSession | null {
   return session
 }
 
+/** 管理员资料以登录会话中的用户信息为准，不再单独存 localStorage。 */
 function readProfile(): AdminProfile {
   if (memoryProfile) return memoryProfile
 
-  const parsed = readStorage<Partial<AdminProfile>>(PROFILE_STORAGE_KEY)
-  const storedName = typeof parsed?.name === 'string' ? parsed.name.trim() : ''
-  const profile: AdminProfile = {
-    username: demoCredentials.username,
-    name: storedName || DEFAULT_PROFILE.name,
-    email: typeof parsed?.email === 'string' ? parsed.email : '',
-    mobile: typeof parsed?.mobile === 'string' ? parsed.mobile : '',
-    avatar: typeof parsed?.avatar === 'string' ? parsed.avatar : ''
-  }
+  const user = readSession()?.user
+  const profile: AdminProfile = user
+    ? {
+        username: user.username,
+        name: user.name || user.username,
+        email: user.email,
+        mobile: user.mobile,
+        avatar: user.avatar
+      }
+    : { ...DEFAULT_PROFILE }
+
   memoryProfile = profile
   return profile
-}
-
-function readPassword(): StoredPassword | null {
-  if (memoryPassword) return memoryPassword
-
-  const parsed = readStorage<Partial<StoredPassword>>(PASSWORD_STORAGE_KEY)
-  if (
-    !parsed ||
-    parsed.algorithm !== 'PBKDF2-SHA256' ||
-    typeof parsed.salt !== 'string' ||
-    typeof parsed.hash !== 'string' ||
-    typeof parsed.iterations !== 'number'
-  ) {
-    return null
-  }
-
-  memoryPassword = {
-    algorithm: 'PBKDF2-SHA256',
-    iterations: parsed.iterations,
-    salt: parsed.salt,
-    hash: parsed.hash,
-    updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : ''
-  }
-  return memoryPassword
 }
 
 /** 当前登录会话；侧边栏等组件用它实时显示管理员名称。 */
@@ -185,63 +153,6 @@ configureApiAuth({
     }
   }
 })
-
-function assertCrypto(): SubtleCrypto {
-  const cryptoApi = globalThis.crypto
-  if (!cryptoApi?.subtle || !cryptoApi.getRandomValues) {
-    throw new Error('当前环境不支持安全密码存储，请通过 localhost 或 HTTPS 打开管理后台')
-  }
-  return cryptoApi.subtle
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
-function fromHex(hex: string): Uint8Array<ArrayBuffer> {
-  const bytes = new Uint8Array(new ArrayBuffer(hex.length / 2))
-  for (let index = 0; index < bytes.length; index += 1) {
-    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16)
-  }
-  return bytes
-}
-
-function createSalt(): string {
-  assertCrypto()
-  const bytes = new Uint8Array(16)
-  globalThis.crypto.getRandomValues(bytes)
-  return toHex(bytes)
-}
-
-async function deriveHash(
-  password: string,
-  salt: string,
-  iterations: number
-): Promise<string> {
-  const subtle = assertCrypto()
-  const key = await subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits']
-  )
-  const bits = await subtle.deriveBits(
-    { name: 'PBKDF2', salt: fromHex(salt), iterations, hash: 'SHA-256' },
-    key,
-    256
-  )
-  return toHex(new Uint8Array(bits))
-}
-
-function safeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false
-  let difference = 0
-  for (let index = 0; index < left.length; index += 1) {
-    difference |= left.charCodeAt(index) ^ right.charCodeAt(index)
-  }
-  return difference === 0
-}
 
 function passwordByteLength(value: string): number {
   return new TextEncoder().encode(value).length
@@ -318,7 +229,6 @@ function seedProfileFromUser(user: AdminUser): void {
   }
   memoryProfile = profile
   profileRef.value = { ...profile }
-  writeStorage(PROFILE_STORAGE_KEY, profile)
 }
 
 export function getSession(): AuthSession | null {
@@ -356,24 +266,15 @@ async function performRefresh(): Promise<AuthSession | null> {
     if (!data?.access_token || !data.user) return null
 
     const user = normalizeUser(data.user, data.user.username)
-    // 账号资料目前仍是本地演示数据，刷新时保留用户已保存的显示名称 / 邮箱 / 手机 / 头像。
-    const profile = readProfile()
-    const mergedUser: AdminUser = {
-      ...user,
-      name: profile.name || user.name,
-      email: profile.email,
-      mobile: profile.mobile,
-      avatar: profile.avatar
-    }
 
     const expiresIn = Number(data.expires_in)
     const session: AuthSession = {
-      username: mergedUser.username,
-      name: mergedUser.name,
+      username: user.username,
+      name: user.name,
       loggedInAt: sessionRef.value?.loggedInAt ?? new Date().toISOString(),
       accessToken: data.access_token,
       expiresAt: Math.floor(Date.now() / 1000) + (expiresIn > 0 ? expiresIn : 900),
-      user: mergedUser
+      user
     }
 
     memorySession = session
@@ -414,23 +315,30 @@ export function getProfile(): AdminProfile {
   return { ...readProfile() }
 }
 
-/** 保存显示名称、邮箱、手机号和头像；登录账号固定不可修改。 */
-export function saveProfile(
+/**
+ * 保存显示名称、邮箱、手机号和头像到 Go 后端，并同步右上角用户区。
+ * 登录账号固定不可修改。
+ */
+export async function saveProfile(
   input: Pick<AdminProfile, 'name' | 'email' | 'mobile'> & Partial<Pick<AdminProfile, 'avatar'>>
-): AdminProfile {
-  const current = readProfile()
-  const next: AdminProfile = {
-    username: current.username,
-    name: input.name.trim(),
+): Promise<AdminProfile> {
+  const name = input.name.trim()
+  if (!name) throw new Error('显示名称不能为空')
+
+  const saved = await updateProfile({
+    name,
     email: input.email.trim(),
     mobile: input.mobile.trim(),
     avatar: (input.avatar ?? '').trim()
-  }
-  if (!next.name) throw new Error('显示名称不能为空')
-  if (!writeStorage(PROFILE_STORAGE_KEY, next)) {
-    throw new Error('浏览器本地存储不可用，资料未保存')
-  }
+  })
 
+  const next: AdminProfile = {
+    username: saved.username,
+    name: saved.name,
+    email: saved.email,
+    mobile: saved.mobile,
+    avatar: saved.avatar
+  }
   memoryProfile = next
   profileRef.value = { ...next }
 
@@ -455,45 +363,18 @@ export function saveProfile(
   return { ...next }
 }
 
-/** 本地演示改密；尚未接后端改密接口，不影响 xqyun_users。 */
+/**
+ * 修改密码：调用 Go 后端，成功后服务端会吊销该账号全部刷新令牌并清除 Cookie。
+ * 本地会话同步清除，调用方提示用户重新登录。
+ */
 export async function changePassword(
   currentPassword: string,
   newPassword: string
 ): Promise<ChangePasswordResult> {
   try {
-    const stored = readPassword()
-    if (stored) {
-      const candidate = await deriveHash(currentPassword, stored.salt, stored.iterations)
-      if (!safeEqual(candidate, stored.hash)) {
-        return { ok: false, message: '当前密码不正确' }
-      }
-    } else if (currentPassword !== demoCredentials.password) {
-      return { ok: false, message: '当前密码不正确' }
-    }
-
-    if (currentPassword === newPassword) {
-      return { ok: false, message: '新密码不能与当前密码相同' }
-    }
-
-    const validation = validateNewPassword(newPassword)
-    if (validation) return { ok: false, message: validation }
-
-    const salt = createSalt()
-    const hash = await deriveHash(newPassword, salt, PASSWORD_ITERATIONS)
-    const record: StoredPassword = {
-      algorithm: 'PBKDF2-SHA256',
-      iterations: PASSWORD_ITERATIONS,
-      salt,
-      hash,
-      updatedAt: new Date().toISOString()
-    }
-
-    if (!writeStorage(PASSWORD_STORAGE_KEY, record)) {
-      return { ok: false, message: '浏览器本地存储不可用，密码未保存' }
-    }
-
-    memoryPassword = record
-    return { ok: true, message: '密码已修改' }
+    await changeAdminPassword(currentPassword, newPassword)
+    clearSession()
+    return { ok: true, message: '密码已修改，请使用新密码重新登录' }
   } catch (error) {
     return {
       ok: false,

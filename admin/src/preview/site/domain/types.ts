@@ -169,19 +169,12 @@ export interface FooterCta {
 }
 
 export interface FooterSettings {
-  /** 订阅区（标题 / 说明按语言配置）。 */
-  showNewsletter: boolean
-  newsletterTitle: Record<Locale, string>
-  newsletterNote: Record<Locale, string>
   /** 联系列：邮箱 / 电话 / 地址沿用站点设置，CTA 单独配置。 */
   showContact: boolean
   cta: FooterCta
   /** 底部大字标。 */
   showWordmark: boolean
   wordmark: string
-  /** 系统状态提示。 */
-  showStatus: boolean
-  statusText: Record<Locale, string>
   columns: FooterColumn[]
   bottomLinks: FooterLink[]
 }

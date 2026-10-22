@@ -54,6 +54,12 @@
         :value="option.value"
       />
     </el-select>
+    <MediaPicker
+      v-else-if="field.type === 'media'"
+      :kind="field.mediaKind ?? 'video'"
+      :model-value="stringValue"
+      @update:model-value="update"
+    />
     <ImagePicker
       v-else-if="field.type === 'image' && field.upload"
       :model-value="stringValue"
@@ -92,6 +98,7 @@ import { computed } from 'vue'
 import type { BlockField, FieldOption } from '@/domain/blockSchema'
 import ArtPicker from './ArtPicker.vue'
 import ImagePicker from './ImagePicker.vue'
+import MediaPicker from './MediaPicker.vue'
 import RichTextEditor from './RichTextEditor.vue'
 
 const props = defineProps<{

@@ -26,6 +26,21 @@ type UserRepository interface {
 	// UpdateLoginState 更新用户最近登录时间与 IP。
 	// 登录会话存放在 Redis，这里只维护 MySQL 中的登录信息。
 	UpdateLoginState(ctx context.Context, userID uint64, lastLoginAt int64, ip *string) error
+
+	// UpdateProfile 更新显示名称、邮箱、手机号与头像。
+	// email / mobile / avatar 为 nil 时写入 NULL，表示清空。
+	UpdateProfile(
+		ctx context.Context,
+		userID uint64,
+		name string,
+		email *string,
+		mobile *string,
+		avatar *string,
+		at int64,
+	) error
+
+	// UpdatePassword 更新密码哈希。
+	UpdatePassword(ctx context.Context, userID uint64, passwordHash string, at int64) error
 }
 
 // Repository 是 UserRepository 的 GORM 实现。
@@ -104,6 +119,62 @@ func (r *Repository) FindNamesByIDs(
 		names[user.ID] = user.Name
 	}
 	return names, nil
+}
+
+// UpdateProfile 更新显示名称、邮箱、手机号与头像。
+func (r *Repository) UpdateProfile(
+	ctx context.Context,
+	userID uint64,
+	name string,
+	email *string,
+	mobile *string,
+	avatar *string,
+	at int64,
+) error {
+	if r.db == nil {
+		return fmt.Errorf("数据访问层：数据库未初始化")
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ? AND deleted_at = 0", userID).
+		Updates(map[string]any{
+			"name":       name,
+			"email":      email,
+			"mobile":     mobile,
+			"avatar":     avatar,
+			"updated_at": at,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("更新管理员资料失败：%w", result.Error)
+	}
+	// 不根据 RowsAffected 判断用户是否存在：MySQL 默认返回「实际变更行数」，
+	// 资料没有变化时为 0，会被误判为不存在；存在性由调用方的 FindByID 保证。
+	return nil
+}
+
+// UpdatePassword 更新密码哈希。
+func (r *Repository) UpdatePassword(
+	ctx context.Context,
+	userID uint64,
+	passwordHash string,
+	at int64,
+) error {
+	if r.db == nil {
+		return fmt.Errorf("数据访问层：数据库未初始化")
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ? AND deleted_at = 0", userID).
+		Updates(map[string]any{
+			"password_hash": passwordHash,
+			"updated_at":    at,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("更新管理员密码失败：%w", result.Error)
+	}
+	return nil
 }
 
 // UpdateLoginState 更新用户最近登录时间与 IP。

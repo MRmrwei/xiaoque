@@ -93,6 +93,26 @@ func (r *Repository) FindByID(ctx context.Context, id uint64) (*models.Page, err
 	return &page, nil
 }
 
+// FindByPath 按语言与路径查询未删除页面，不区分发布状态。
+// 同一语言下路径唯一，查询结果最多一条。
+func (r *Repository) FindByPath(ctx context.Context, locale string, path string) (*models.Page, error) {
+	if r.db == nil {
+		return nil, fmt.Errorf("数据访问层：数据库未初始化")
+	}
+
+	var page models.Page
+	err := r.db.WithContext(ctx).
+		Where("locale = ? AND path = ? AND deleted_at = 0", locale, path).
+		First(&page).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询页面失败：%w", err)
+	}
+	return &page, nil
+}
+
 // FindByGroupAndLocale 按翻译组与语言查询页面，用于判断是否已有配对版本。
 func (r *Repository) FindByGroupAndLocale(
 	ctx context.Context,

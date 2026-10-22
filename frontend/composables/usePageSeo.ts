@@ -1,12 +1,13 @@
-import type { PublishedPage } from '~/domain/types'
-import { getSiteSettings } from '~/services/siteService'
+import type { Locale, PublishedPage } from '~/domain/types'
+import { useSiteChrome } from '~/composables/useSiteChrome'
 
 interface PageSeoOptions {
   page?: PublishedPage | null
   title?: string
   description?: string
   path?: string
-  alternates?: { zh: string; en: string }
+  /** 已发布语言对应的路径；未发布的语言不要传，避免 hreflang 指向 404。 */
+  alternates?: Partial<Record<Locale, string>>
   type?: 'website' | 'article'
   noindex?: boolean
 }
@@ -15,19 +16,37 @@ export function usePageSeo(options: PageSeoOptions = {}) {
   const { locale } = useUiText()
   const localePath = useLocalePath()
   const origin = useRequestURL().origin
-  const siteSettings = getSiteSettings()
+  const { settings } = useSiteChrome()
 
   const fallbackPath = options.path ?? options.page?.path ?? '/'
-  const zhRawPath = options.alternates?.zh ?? fallbackPath
-  const enRawPath = options.alternates?.en ?? fallbackPath
-  const currentRawPath = locale.value === 'en' ? enRawPath : zhRawPath
+  const alternates = options.alternates
+  // 没有 alternates 时沿用旧行为：两种语言都指向当前路径。
+  const zhRawPath = alternates?.zh ?? (alternates ? undefined : fallbackPath)
+  const enRawPath = alternates?.en ?? (alternates ? undefined : fallbackPath)
+  const currentRawPath =
+    locale.value === 'en'
+      ? (enRawPath ?? zhRawPath ?? fallbackPath)
+      : (zhRawPath ?? enRawPath ?? fallbackPath)
 
-  const title = options.title ?? options.page?.seo.title ?? '小鹊云'
+  const fallbackTitle = locale.value === 'en' ? 'Website' : '官网'
+  const title =
+    options.title ??
+    options.page?.seo.title ??
+    (settings.value.siteName[locale.value] || fallbackTitle)
   const description = options.description ?? options.page?.seo.description ?? ''
 
   const canonical = new URL(localePath(currentRawPath), origin).href
-  const zhHref = new URL(localePath(zhRawPath, 'zh'), origin).href
-  const enHref = new URL(localePath(enRawPath, 'en'), origin).href
+  const zhHref = zhRawPath ? new URL(localePath(zhRawPath, 'zh'), origin).href : ''
+  const enHref = enRawPath ? new URL(localePath(enRawPath, 'en'), origin).href : ''
+  const defaultHref = zhHref || enHref
+
+  const alternateLinks = [
+    ...(zhHref ? [{ rel: 'alternate', hreflang: 'zh-CN', href: zhHref }] : []),
+    ...(enHref ? [{ rel: 'alternate', hreflang: 'en', href: enHref }] : []),
+    ...(defaultHref
+      ? [{ rel: 'alternate', hreflang: 'x-default', href: defaultHref }]
+      : [])
+  ]
 
   useSeoMeta({
     title,
@@ -44,17 +63,13 @@ export function usePageSeo(options: PageSeoOptions = {}) {
     meta: [
       {
         name: 'robots',
-        content:
-          options.noindex || !siteSettings.allowIndex
+        content: computed(() =>
+          options.noindex || !settings.value.allowIndex
             ? 'noindex, nofollow'
             : 'index, follow'
+        )
       }
     ],
-    link: [
-      { rel: 'canonical', href: canonical },
-      { rel: 'alternate', hreflang: 'zh-CN', href: zhHref },
-      { rel: 'alternate', hreflang: 'en', href: enHref },
-      { rel: 'alternate', hreflang: 'x-default', href: zhHref }
-    ]
+    link: [{ rel: 'canonical', href: canonical }, ...alternateLinks]
   })
 }

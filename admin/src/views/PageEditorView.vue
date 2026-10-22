@@ -122,6 +122,7 @@
           :locale="page.locale"
           :collections="collections"
           :settings="pagesStore.settings"
+          :focus-request="focusRequest"
         />
       </div>
     </div>
@@ -153,12 +154,13 @@
         :locale="page.locale"
         :collections="collections"
         :settings="pagesStore.settings"
+        :focus-request="focusRequest"
       />
     </el-dialog>
   </div>
 
   <div v-else-if="pagesStore.loading" class="adm-page">
-    <el-result icon="info" title="正在加载页面" sub-title="正在从 Go 后端读取页面数据…" />
+    <el-result icon="info" title="正在加载页面" sub-title="正在读取页面数据…" />
   </div>
 
   <div v-else-if="pagesStore.loadError" class="adm-page">
@@ -240,6 +242,14 @@ function formatWhen(value: string): string {
 /* 编辑状态 */
 const selectedId = ref<string | null>(null)
 const mode = ref<'block' | 'page'>('block')
+/** 每次点击区块递增 token，预览据此滚动到对应区块。 */
+const focusRequest = ref<{ id: string; token: number } | null>(null)
+let focusToken = 0
+
+function focusPreviewBlock(id: string) {
+  focusToken += 1
+  focusRequest.value = { id, token: focusToken }
+}
 const libraryOpen = ref(false)
 const previewOpen = ref(false)
 const publishOpen = ref(false)
@@ -354,6 +364,7 @@ function redo() {
 function selectBlock(block: PageBlock) {
   selectedId.value = block.id
   mode.value = 'block'
+  focusPreviewBlock(block.id)
 }
 
 function addBlock(type: PageBlock['type']) {
@@ -363,6 +374,7 @@ function addBlock(type: PageBlock['type']) {
   page.value.blocks.push(block)
   selectedId.value = block.id
   mode.value = 'block'
+  focusPreviewBlock(block.id)
   libraryOpen.value = false
   history.record(true)
 }

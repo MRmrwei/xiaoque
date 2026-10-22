@@ -12,10 +12,10 @@
       <button
         type="button"
         class="image-tab"
-        :class="{ active: mode === 'upload' }"
-        @click="mode = 'upload'"
+        :class="{ active: mode === 'library' }"
+        @click="mode = 'library'"
       >
-        上传图片
+        素材库
       </button>
     </div>
 
@@ -26,59 +26,49 @@
       @update:model-value="emit('update:modelValue', $event)"
     />
 
-    <div v-else class="upload-panel">
-      <div v-if="custom" class="upload-preview">
-        <img :src="modelValue" alt="已上传图片预览" />
-        <div class="upload-foot">
-          <span class="upload-meta">{{ sizeLabel }}</span>
-          <div class="upload-actions">
-            <el-button size="small" @click="pick">更换</el-button>
+    <div v-else class="library-panel">
+      <div v-if="custom" class="library-preview">
+        <img :src="modelValue" alt="已选图片预览" />
+        <div class="library-foot">
+          <span class="library-meta">已选图片</span>
+          <div class="library-actions">
+            <el-button size="small" @click="libraryOpen = true">更换</el-button>
             <el-button size="small" @click="remove">移除</el-button>
           </div>
         </div>
       </div>
 
-      <button
-        v-else
-        type="button"
-        class="upload-drop"
-        :class="{ busy: loading }"
-        @click="pick"
-        @dragover.prevent
-        @drop.prevent="onDrop"
-      >
-        <span class="upload-icon"><UiIcon name="image" :size="20" /></span>
-        <span class="upload-title">{{ loading ? '正在处理图片…' : '点击或拖拽图片到这里' }}</span>
-        <span class="upload-hint">JPG / PNG / WebP / GIF / SVG，自动压缩到 1600px 以内</span>
-      </button>
-
-      <p class="upload-note">
-        图片会压缩后随页面数据保存到 Go 后端。
-      </p>
-
-      <input
-        ref="fileInput"
-        class="upload-input"
-        type="file"
-        accept="image/*"
-        @change="onPick"
-      />
+      <template v-else>
+        <el-button type="primary" plain @click="libraryOpen = true">
+          打开图片素材库
+        </el-button>
+        <p class="library-note">
+          从已上传的图片素材中选择；需要新图片时，在素材库弹窗里上传即可。
+        </p>
+      </template>
     </div>
+
+    <MediaLibraryDialog
+      v-model:visible="libraryOpen"
+      kind="image"
+      :selected="modelValue"
+      @select="onLibrarySelect"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import type { FieldOption } from '@/domain/blockSchema'
-import { estimateDataUrlBytes, fileToImageDataUrl, formatBytes, isCustomImage } from '@/utils/image'
-import UiIcon from '~/components/UiIcon.vue'
+import { isCustomImage } from '@/utils/image'
 import ArtPicker from './ArtPicker.vue'
+import MediaLibraryDialog from './MediaLibraryDialog.vue'
+import type { ApiMediaItem } from '@/services/mediaApi'
 
 const props = defineProps<{
   modelValue: string
   options?: FieldOption[]
-  /** 只能上传图片，不展示内置图形选项。 */
+  /** 只能从素材库选择图片，不展示内置图形选项。 */
   uploadOnly?: boolean
 }>()
 
@@ -86,22 +76,18 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
-const mode = ref<'art' | 'upload'>(
-  props.uploadOnly || isCustomImage(props.modelValue) ? 'upload' : 'art'
+const mode = ref<'art' | 'library'>(
+  props.uploadOnly || isCustomImage(props.modelValue) ? 'library' : 'art'
 )
-const loading = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
+const libraryOpen = ref(false)
 
 const custom = computed(() => isCustomImage(props.modelValue))
-const sizeLabel = computed(() => {
-  if (!custom.value) return ''
-  return formatBytes(estimateDataUrlBytes(props.modelValue))
-})
 
 watch(
   () => props.modelValue,
   (value) => {
-    if (isCustomImage(value)) mode.value = 'upload'
+    if (isCustomImage(value)) mode.value = 'library'
+    else if (!value && !props.uploadOnly) mode.value = 'art'
   }
 )
 
@@ -109,44 +95,18 @@ watch(
   () => props.options,
   () => {
     mode.value =
-      props.uploadOnly || isCustomImage(props.modelValue) ? 'upload' : 'art'
+      props.uploadOnly || isCustomImage(props.modelValue) ? 'library' : 'art'
   }
 )
 
-function pick() {
-  fileInput.value?.click()
-}
-
 function remove() {
-  emit('update:modelValue', props.options?.[0]?.value ?? '')
-  mode.value = props.uploadOnly ? 'upload' : 'art'
+  emit('update:modelValue', props.uploadOnly ? '' : props.options?.[0]?.value ?? '')
+  mode.value = props.uploadOnly ? 'library' : 'art'
 }
 
-function onPick(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (file) void applyFile(file)
-}
-
-function onDrop(event: DragEvent) {
-  const file = event.dataTransfer?.files?.[0]
-  if (file) void applyFile(file)
-}
-
-async function applyFile(file: File) {
-  if (loading.value) return
-  loading.value = true
-  try {
-    const dataUrl = await fileToImageDataUrl(file)
-    emit('update:modelValue', dataUrl)
-    mode.value = 'upload'
-    ElMessage.success(`图片已更新（${formatBytes(estimateDataUrlBytes(dataUrl))}）`)
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '图片处理失败')
-  } finally {
-    loading.value = false
-  }
+function onLibrarySelect(item: ApiMediaItem) {
+  emit('update:modelValue', item.url)
+  mode.value = 'library'
 }
 </script>
 
@@ -183,78 +143,30 @@ async function applyFile(file: File) {
   box-shadow: 0 1px 2px rgba(20, 21, 24, 0.12);
 }
 
-.upload-panel {
+.library-panel {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.upload-drop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 20px 14px;
-  border: 1px dashed var(--adm-line-strong, var(--adm-line));
-  border-radius: 8px;
-  background: var(--adm-surface);
-  color: var(--adm-muted);
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.upload-drop:hover,
-.upload-drop.busy {
-  border-color: var(--adm-accent);
-  background: rgba(232, 80, 58, 0.04);
-}
-
-.upload-icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #fff;
-  color: var(--adm-accent);
-  border: 1px solid var(--adm-line);
-}
-
-.upload-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--adm-ink-soft, var(--adm-ink));
-}
-
-.upload-hint {
-  font-size: 9.5px;
-  color: var(--adm-muted-2);
-}
-
-.upload-note {
-  margin: 0;
-  font-size: 9.5px;
-  line-height: 1.6;
-  color: var(--adm-muted-2);
-}
-
-.upload-preview {
+.library-preview {
+  width: 100%;
   border: 1px solid var(--adm-line);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--adm-surface);
 }
 
-.upload-preview img {
+.library-preview img {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  background: #f3efe7;
+  max-height: 220px;
+  object-fit: contain;
+  background: var(--adm-surface);
 }
 
-.upload-foot {
+.library-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -262,18 +174,20 @@ async function applyFile(file: File) {
   padding: 6px 8px;
 }
 
-.upload-meta {
-  font-family: var(--adm-mono);
-  font-size: 9.5px;
+.library-meta {
+  font-size: 11px;
   color: var(--adm-muted);
 }
 
-.upload-actions {
+.library-actions {
   display: flex;
   gap: 4px;
 }
 
-.upload-input {
-  display: none;
+.library-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--adm-muted-2);
 }
 </style>

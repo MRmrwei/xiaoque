@@ -20,6 +20,11 @@ body {
   background: var(--paper);
 }
 
+/* 点击左侧区块滚动定位时，避免被吸顶预览头部挡住。 */
+.preview-page [data-preview-block] {
+  scroll-margin-top: 88px;
+}
+
 .preview-empty {
   padding: 90px 24px;
   text-align: center;

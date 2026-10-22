@@ -142,7 +142,8 @@
         <button
           type="button"
           class="rt-btn"
-          title="插入图片"
+          title="插入图片（上传到素材库）"
+          :disabled="uploading"
           @click="imageInput?.click()"
         >
           <UiIcon name="image" :size="14" />
@@ -192,11 +193,9 @@ import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  estimateDataUrlBytes,
-  fileToImageDataUrl,
-  formatBytes
-} from '@/utils/image'
+import { formatBytes } from '@/utils/image'
+import { MEDIA_RULES } from '@/utils/media'
+import { uploadMedia } from '@/services/mediaApi'
 import UiIcon from '~/components/UiIcon.vue'
 
 const props = defineProps<{
@@ -317,6 +316,7 @@ function clearFormat() {
 }
 
 const imageInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
 
 function onImagePick(event: Event) {
   const input = event.target as HTMLInputElement
@@ -333,20 +333,35 @@ function handleImageFiles(files?: FileList | null): boolean {
 }
 
 async function insertImageFile(file: File) {
+  if (uploading.value) return
+  const rule = MEDIA_RULES.image
+  if (!rule.pattern.test(file.name)) {
+    ElMessage.error(`仅支持 JPG / PNG / WebP / GIF / AVIF 图片`)
+    return
+  }
+  if (file.size > rule.maxBytes) {
+    ElMessage.error(`图片不能超过 ${formatBytes(rule.maxBytes)}`)
+    return
+  }
+
+  uploading.value = true
   try {
-    const dataUrl = await fileToImageDataUrl(file)
+    // 图片统一上传到素材库，正文里只保存 URL，避免页面 JSON 被 data URL 撑大。
+    const item = await uploadMedia(file, 'image')
     editor.value
       ?.chain()
       .focus()
       .setImage({
-        src: dataUrl,
+        src: item.url,
         alt: file.name.replace(/\.[^.]+$/, ''),
         title: file.name
       })
       .run()
-    ElMessage.success(`图片已插入（${formatBytes(estimateDataUrlBytes(dataUrl))}）`)
+    ElMessage.success('图片已上传到素材库并插入')
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '图片处理失败')
+    ElMessage.error(error instanceof Error ? error.message : '图片上传失败')
+  } finally {
+    uploading.value = false
   }
 }
 

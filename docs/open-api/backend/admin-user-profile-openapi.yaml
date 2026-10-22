@@ -1,0 +1,171 @@
+openapi: 3.0.3
+info:
+  title: 小鹊云当前管理员 API
+  version: 1.0.0
+  license:
+    name: Proprietary
+  description: |
+    小鹊云 Go 后端（CloudWeGo Hertz）当前管理员资料与密码接口，对应管理后台右上角「管理员账号」页。
+
+    通用约定：
+    - 所有响应 HTTP 状态码统一为 200，成功与失败通过响应体中的 `code` 判断：`0` 成功，`40000` 参数错误，`40100` 未登录 / 令牌无效，`40300` 无权限，`40400` 不存在，`40900` 资源冲突，`50000` 服务端错误。
+    - 用户 ID 由后端从 Access Token 的 `sub` 解析，前端不传，避免越权修改其他账号。
+    - 本组接口需要 `Authorization: Bearer <access_token>`；登录、刷新令牌与退出登录见 `admin-auth-session.yaml`。
+servers:
+  - url: http://127.0.0.1:8888
+    description: 本地开发
+tags:
+  - name: 当前管理员
+    description: 管理员资料与密码
+
+paths:
+  /api/v1/admin/user/profile:
+    put:
+      tags: [当前管理员]
+      operationId: updateAdminProfile
+      summary: 修改当前管理员资料
+      description: |
+        修改显示名称、邮箱、手机号与头像，登录账号（username）不可修改。
+        - `name` 必填，最多 100 个字符。
+        - `email` 可留空，最多 255 个字符，填写时需符合邮箱格式。
+        - `mobile` 可留空，最多 32 个字符。
+        - `avatar` 为 data URL 或外部地址，可留空表示清空；上限 2MB。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminProfileUpdateRequest'
+      responses:
+        '200':
+          description: |
+            更新后的资料。`code = 0` 成功；`40000` 参数校验失败；`40100` 未登录；`40400` 账号不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProfileApiResponse'
+
+  /api/v1/admin/user/password:
+    put:
+      tags: [当前管理员]
+      operationId: changeAdminPassword
+      summary: 修改当前管理员密码
+      description: |
+        校验当前密码后写入新的 bcrypt 哈希。
+
+        修改成功后：
+        - 吊销该账号在 Redis 中的全部刷新令牌（所有设备都需要重新登录）；
+        - 清除当前浏览器的 Refresh Token Cookie；
+        - 当前 Access Token 在过期前仍可能有效，前端应立即清除本地会话并跳转登录页。
+
+        新密码至少 8 个字符，且不超过 bcrypt 的 72 字节上限。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPasswordChangeRequest'
+      responses:
+        '200':
+          description: |
+            修改结果。`code = 0` 成功；`40000` 当前密码错误 / 新密码不符合规则；`40100` 未登录；`40400` 账号不存在；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiEnvelope:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: 业务码，0 表示成功
+        message:
+          type: string
+          description: 提示信息
+        data:
+          nullable: true
+          description: 业务数据
+
+    AdminProfileUpdateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: 显示名称，必填
+          example: 小阙
+        email:
+          type: string
+          maxLength: 255
+          description: 邮箱，可留空；填写时需符合邮箱格式
+          example: hello@xiaoque.com
+        mobile:
+          type: string
+          maxLength: 32
+          description: 手机号，可留空
+          example: '13800138000'
+        avatar:
+          type: string
+          description: 头像 data URL 或外部地址，可留空表示清空；上限 2MB
+          example: ''
+
+    AdminProfile:
+      type: object
+      required: [id, username, name, email, mobile, avatar]
+      properties:
+        id:
+          type: string
+          description: 用户 ID
+          example: '1'
+        username:
+          type: string
+          description: 登录账号，不可修改
+          example: admin
+        name:
+          type: string
+          description: 显示名称
+          example: 小阙
+        email:
+          type: string
+          description: 邮箱，可能为空字符串
+        mobile:
+          type: string
+          description: 手机号，可能为空字符串
+        avatar:
+          type: string
+          description: 头像 data URL 或外部地址，可能为空字符串
+
+    AdminProfileApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminProfile'
+
+    AdminPasswordChangeRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          description: 当前密码
+        new_password:
+          type: string
+          description: 新密码，至少 8 个字符，不超过 72 字节

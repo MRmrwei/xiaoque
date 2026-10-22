@@ -48,6 +48,8 @@ const props = defineProps<{
   locale: Locale
   collections: SiteCollections
   settings: SiteSettings
+  /** 当前选中的区块与点击序号；序号变化时预览滚动到对应区块。 */
+  focusRequest?: { id: string; token: number } | null
 }>()
 
 const devices: Array<{ id: DeviceMode; label: string; icon: string; width: string }> = [
@@ -83,7 +85,9 @@ function sendUpdate() {
     page: JSON.parse(JSON.stringify(props.page)),
     locale: props.locale,
     collections: JSON.parse(JSON.stringify(props.collections)),
-    settings: JSON.parse(JSON.stringify(props.settings))
+    settings: JSON.parse(JSON.stringify(props.settings)),
+    focusBlockId: props.focusRequest?.id,
+    focusToken: props.focusRequest?.token
   }
   frame.contentWindow.postMessage(payload, '*')
 }
@@ -124,6 +128,11 @@ watch(
   () => props.settings,
   () => scheduleUpdate(),
   { deep: true }
+)
+// 点击左侧区块时立即推送，让预览尽快滚到对应位置。
+watch(
+  () => props.focusRequest?.token,
+  () => sendUpdate()
 )
 
 onMounted(() => {

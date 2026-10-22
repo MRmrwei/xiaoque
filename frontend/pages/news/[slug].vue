@@ -14,7 +14,7 @@
         <h1>{{ item.title }}</h1>
         <p class="article-summary">{{ item.summary }}</p>
         <div class="article-byline">
-          <span class="byline-avatar">鹊</span>
+          <span class="byline-avatar">{{ avatarLetter }}</span>
           <div>
             <strong>{{ t('news.editorial') }}</strong>
             <span>{{ t('news.published') }} {{ formatDate(item.publishedAt, locale) }}</span>
@@ -49,10 +49,16 @@
 
     <div class="container article-footer">
       <div class="article-author">
-        <span class="byline-avatar byline-avatar--lg">鹊</span>
+        <span class="byline-avatar byline-avatar--lg">{{ avatarLetter }}</span>
         <div>
           <strong>{{ t('news.editorial') }}</strong>
-          <p>{{ locale === 'en' ? 'Notes from the team building Magpie Cloud.' : '来自小鹊云团队的产品与内容笔记。' }}</p>
+          <p>
+            {{
+              locale === 'en'
+                ? `Notes from the team building ${siteName}.`
+                : `来自${siteName}团队的产品与内容笔记。`
+            }}
+          </p>
         </div>
         <NuxtLink :to="localePath('/news')" class="article-more">
           {{ t('news.more') }} <UiIcon name="arrow-up-right" :size="15" />
@@ -91,6 +97,7 @@ import UiIcon from '~/components/UiIcon.vue'
 import VisualArt from '~/components/VisualArt.vue'
 import { useNewsArticle } from '~/composables/useNewsArticle'
 import { usePageSeo } from '~/composables/usePageSeo'
+import { useSiteChrome } from '~/composables/useSiteChrome'
 import { useToast } from '~/composables/useToast'
 import { useUiText } from '~/composables/useUiText'
 import { copyText, formatDate } from '~/utils/format'
@@ -98,6 +105,9 @@ import { copyText, formatDate } from '~/utils/format'
 const route = useRoute()
 const localePath = useLocalePath()
 const { t, locale } = useUiText()
+const { settings } = useSiteChrome()
+const siteName = computed(() => settings.value.siteName[locale.value])
+const avatarLetter = computed(() => siteName.value.charAt(0).toUpperCase() || '鹊')
 const { notify } = useToast()
 
 const slug = String(route.params.slug ?? '')
@@ -110,7 +120,7 @@ if (item) {
   const enSlug = locale.value === 'en' ? item.slug : (translatedSlug ?? item.slug)
 
   usePageSeo({
-    title: `${item.title} · ${locale.value === 'en' ? 'Magpie Cloud' : '小鹊云'}`,
+    title: `${item.title} · ${siteName.value}`,
     description: item.summary,
     type: 'article',
     alternates: {
@@ -124,7 +134,10 @@ if (item) {
     if (event) setResponseStatus(event, 404)
   }
   usePageSeo({
-    title: locale.value === 'en' ? 'Story not found · Magpie Cloud' : '文章未找到 · 小鹊云',
+    title:
+      locale.value === 'en'
+        ? `Story not found · ${siteName.value}`
+        : `文章未找到 · ${siteName.value}`,
     description:
       locale.value === 'en'
         ? 'The story you are looking for may have moved, or never existed.'

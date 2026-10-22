@@ -224,19 +224,3 @@ func (p *PageController) Unpublish(ctx context.Context, c *app.RequestContext) {
 	}
 	response.Success(c, nil)
 }
-
-// CreatePreviewToken 生成草稿预览令牌。
-// POST /api/v1/admin/pages/:id/preview-token
-func (p *PageController) CreatePreviewToken(ctx context.Context, c *app.RequestContext) {
-	id, ok := pathID(c, "id", "页面 ID 无效")
-	if !ok {
-		return
-	}
-
-	result, err := newPageService(p.App()).CreatePreviewToken(ctx, id)
-	if err != nil {
-		fail(ctx, c, err)
-		return
-	}
-	response.Success(c, result)
-}

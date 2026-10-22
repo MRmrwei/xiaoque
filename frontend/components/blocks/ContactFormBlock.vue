@@ -46,11 +46,17 @@
       <div class="form-card">
         <div class="form-card-head">
           <span v-if="formKicker" class="mono">{{ formKicker }}</span>
-          <span v-if="replyNote" class="form-live"><i />{{ replyNote }}</span>
         </div>
 
         <Transition name="form-fade" mode="out-in">
-          <form v-if="!sent" key="form" class="c-form" novalidate @submit.prevent="onSubmit">
+          <form
+            v-if="!sent"
+            key="form"
+            class="c-form"
+            novalidate
+            @input="submitError = ''"
+            @submit.prevent="onSubmit"
+          >
             <div class="form-row">
               <div class="c-field" :class="{ invalid: errors.name }">
                 <label for="cf-name">{{ t('form.name') }} <em>*</em></label>
@@ -76,7 +82,7 @@
 
             <div class="form-row">
               <div class="c-field" :class="{ invalid: errors.email }">
-                <label for="cf-email">{{ t('form.email') }} <em>*</em></label>
+                <label for="cf-email">{{ t('form.email') }}</label>
                 <input
                   id="cf-email"
                   v-model="form.email"
@@ -86,14 +92,16 @@
                 />
                 <span v-if="errors.email" class="error-text">{{ errors.email }}</span>
               </div>
-              <div class="c-field">
-                <label for="cf-phone">{{ t('form.phone') }}</label>
+              <div class="c-field" :class="{ invalid: errors.phone }">
+                <label for="cf-phone">{{ t('form.phone') }} <em>*</em></label>
                 <input
                   id="cf-phone"
                   v-model="form.phone"
-                  type="text"
+                  type="tel"
                   :placeholder="t('form.phonePlaceholder')"
+                  @input="errors.phone = ''"
                 />
+                <span v-if="errors.phone" class="error-text">{{ errors.phone }}</span>
               </div>
             </div>
 
@@ -108,6 +116,11 @@
               />
               <span v-if="errors.message" class="error-text">{{ errors.message }}</span>
             </div>
+
+            <p v-if="submitError" class="form-error" role="alert">
+              <span class="form-error-icon">!</span>
+              <span>{{ submitError }}</span>
+            </p>
 
             <button type="submit" class="btn btn--primary form-submit" :disabled="sending">
               <span v-if="!sending">{{ data.submitLabel || t('form.submit') }} <span class="arr">↗</span></span>
@@ -149,7 +162,7 @@ const props = withDefaults(
   { preview: false }
 )
 
-const { t, locale } = useUiText()
+const { t } = useUiText()
 const data = computed(() => props.propsData)
 const title = computed(() => titleHtml(data.value.title || ''))
 const kicker = computed(() =>
@@ -161,14 +174,7 @@ const mapNote = computed(() =>
 const formKicker = computed(() =>
   data.value.formKicker === undefined ? 'PROJECT INQUIRY' : data.value.formKicker
 )
-const replyNote = computed(() =>
-  data.value.replyNote === undefined
-    ? locale.value === 'en'
-      ? 'Replies within 1 day'
-      : '一个工作日内回复'
-    : data.value.replyNote
-)
-const { form, errors, sending, sent, submit, reset } = useContactForm()
+const { form, errors, sending, sent, submitError, submit, reset } = useContactForm()
 
 async function onSubmit() {
   if (props.preview) return
@@ -307,21 +313,6 @@ async function onSubmit() {
   color: var(--muted-2);
 }
 
-.form-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: var(--muted);
-}
-
-.form-live i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #6aa374;
-}
-
 .c-form {
   display: flex;
   flex-direction: column;
@@ -390,6 +381,34 @@ async function onSubmit() {
 .error-text {
   font-size: 10.5px;
   color: var(--accent-deep);
+}
+
+.form-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(232, 80, 58, 0.32);
+  border-radius: 10px;
+  background: rgba(232, 80, 58, 0.07);
+  color: var(--accent-deep);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.form-error-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .form-submit {

@@ -103,7 +103,7 @@ export const usePagesStore = defineStore('pages', () => {
     if (saveDemo(demo)) {
       storageError.value = ''
     } else {
-      storageError.value = '浏览器本地存储不可用，表单留言修改仅保留在当前页面。'
+      storageError.value = '当前浏览器无法保存设置，刷新后可能丢失。'
     }
   }
 
@@ -155,6 +155,10 @@ export const usePagesStore = defineStore('pages', () => {
       submissions.value = result.items.map(submissionFromApi)
       submissionStats.value = result.stats
       submissionTotal.value = result.total
+      // 只有未筛选的全局查询才更新侧边栏红点，避免筛选语言 / 关键词时数量变小。
+      if (isGlobalSubmissionQuery(query)) {
+        newSubmissionCount.value = result.stats.new
+      }
     } catch (error) {
       if (requestId !== submissionRequestId) return
       submissionsError.value =
@@ -162,6 +166,24 @@ export const usePagesStore = defineStore('pages', () => {
     } finally {
       if (requestId === submissionRequestId) submissionsLoading.value = false
     }
+  }
+
+  /** 只刷新待处理留言数，供侧边栏红点使用；不覆盖当前列表、筛选与统计卡片。 */
+  async function refreshSubmissionStats(): Promise<void> {
+    try {
+      const result = await listSubmissions({ page: 1, page_size: 1 })
+      newSubmissionCount.value = result.stats.new
+    } catch {
+      // 静默失败：保留上一次统计，不打断当前操作。
+    }
+  }
+
+  function isGlobalSubmissionQuery(query: SubmissionQuery): boolean {
+    return (
+      (!query.status || query.status === 'all') &&
+      (!query.locale || query.locale === 'all') &&
+      !query.keyword?.trim()
+    )
   }
 
   function toApiSubmissionQuery(query: SubmissionQuery): ApiSubmissionQuery {
@@ -394,11 +416,14 @@ export const usePagesStore = defineStore('pages', () => {
     const index = submissions.value.findIndex((item) => item.id === id)
     if (index >= 0) submissions.value[index] = record
     await loadSubmissions(lastSubmissionQuery)
+    // 状态变更可能让待处理数量变化，立即同步红点。
+    void refreshSubmissionStats()
   }
 
   const pageCount = computed(() => pages.value.length)
   const submissionCount = computed(() => submissionStats.value.total)
-  const newSubmissionCount = computed(() => submissionStats.value.new)
+  /** 全站待处理留言数，只由全局查询或定时刷新更新。 */
+  const newSubmissionCount = ref(0)
 
   return {
     pages,
@@ -420,6 +445,7 @@ export const usePagesStore = defineStore('pages', () => {
     ensureLoaded,
     reloadAll,
     loadSubmissions,
+    refreshSubmissionStats,
     setSubmissionStatus,
     getById,
     getByPath,

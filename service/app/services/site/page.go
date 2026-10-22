@@ -2,9 +2,6 @@ package site
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,9 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudwego/hertz/pkg/common/hlog"
+
 	"suki/xqyun/app/dto"
 	"suki/xqyun/app/models"
 	pagerepository "suki/xqyun/app/repository/page"
+	renderrepository "suki/xqyun/app/repository/render"
 	userrepository "suki/xqyun/app/repository/user"
 	"suki/xqyun/app/utils/ulid"
 )
@@ -24,8 +24,6 @@ const (
 	pageStatusDraft = "draft"
 	// pageStatusPublished 已发布。
 	pageStatusPublished = "published"
-	// previewTokenTTL 是草稿预览令牌的有效期。
-	previewTokenTTL = 30 * time.Minute
 )
 
 // PageListInput 是页面列表查询条件。
@@ -76,21 +74,22 @@ type PagePublishInput struct {
 
 // PageService 是页面内容用例服务。
 type PageService struct {
-	pages         *pagerepository.Repository
-	users         *userrepository.Repository
-	previewSecret []byte
+	pages *pagerepository.Repository
+	users *userrepository.Repository
+	cache *renderrepository.Cache
 }
 
 // NewPageService 创建页面内容用例服务。
+// cache 只在前台渲染缓存启用时生效，发布 / 下架 / 删除后主动失效。
 func NewPageService(
 	pages *pagerepository.Repository,
 	users *userrepository.Repository,
-	previewSecret []byte,
+	cache *renderrepository.Cache,
 ) *PageService {
 	return &PageService{
-		pages:         pages,
-		users:         users,
-		previewSecret: append([]byte(nil), previewSecret...),
+		pages: pages,
+		users: users,
+		cache: cache,
 	}
 }
 
@@ -309,6 +308,7 @@ func (s *PageService) SaveDraft(
 		return dto.AdminPageDraft{}, err
 	}
 
+	oldPath := page.Path
 	path := page.Path
 	if strings.TrimSpace(input.Path) != "" {
 		path, err = validatePath(input.Path)
@@ -350,14 +350,25 @@ func (s *PageService) SaveDraft(
 	if err := s.pages.UpdateDraft(ctx, page); err != nil {
 		return dto.AdminPageDraft{}, pageRepositoryError(err)
 	}
+
+	// 草稿内容不影响线上，只有路径变化会改变前台地址与 alternates，需要失效缓存。
+	if path != oldPath {
+		s.invalidateGroupCache(ctx, page)
+		s.invalidatePageCache(ctx, &models.Page{Locale: page.Locale, Path: oldPath})
+	}
 	return toPageDraft(page)
 }
 
 // Delete 软删除页面。
 func (s *PageService) Delete(ctx context.Context, id uint64) error {
+	page, err := s.findPage(ctx, id)
+	if err != nil {
+		return err
+	}
 	if err := s.pages.SoftDelete(ctx, id, time.Now().Unix()); err != nil {
 		return pageRepositoryError(err)
 	}
+	s.invalidateGroupCache(ctx, page)
 	return nil
 }
 
@@ -468,11 +479,18 @@ func (s *PageService) Publish(
 	id uint64,
 	input PagePublishInput,
 ) (dto.AdminPagePublishResponse, error) {
+	page, err := s.findPage(ctx, id)
+	if err != nil {
+		return dto.AdminPagePublishResponse{}, err
+	}
+
 	now := time.Now().Unix()
 	version, err := s.pages.Publish(ctx, id, input.OperatorID, optionalString(input.Note), now)
 	if err != nil {
 		return dto.AdminPagePublishResponse{}, pageRepositoryError(err)
 	}
+	s.invalidateGroupCache(ctx, page)
+
 	return dto.AdminPagePublishResponse{
 		Version:     version,
 		PublishedAt: now,
@@ -485,6 +503,11 @@ func (s *PageService) Unpublish(
 	id uint64,
 	input PagePublishInput,
 ) error {
+	page, err := s.findPage(ctx, id)
+	if err != nil {
+		return err
+	}
+
 	note := strings.TrimSpace(input.Note)
 	if note == "" {
 		note = "下架"
@@ -499,40 +522,43 @@ func (s *PageService) Unpublish(
 	); err != nil {
 		return pageRepositoryError(err)
 	}
+	s.invalidateGroupCache(ctx, page)
 	return nil
 }
 
-// CreatePreviewToken 生成只允许读取当前页面草稿的签名令牌。
-func (s *PageService) CreatePreviewToken(
-	ctx context.Context,
-	id uint64,
-) (dto.AdminPagePreviewTokenResponse, error) {
-	page, err := s.findPage(ctx, id)
-	if err != nil {
-		return dto.AdminPagePreviewTokenResponse{}, err
+// invalidateGroupCache 失效页面及其同翻译组所有语言的缓存。
+// alternates 只包含已发布语言，发布 / 下架 / 删除会改变同组其他页面的 alt 地址。
+func (s *PageService) invalidateGroupCache(ctx context.Context, page *models.Page) {
+	targets := []*models.Page{page}
+	if page.TranslationGroupID != "" {
+		siblings, err := s.pages.FindByGroupIDs(ctx, []string{page.TranslationGroupID})
+		if err != nil {
+			hlog.CtxWarnf(ctx, "render cache: query translation group: %v", err)
+		} else {
+			for index := range siblings {
+				targets = append(targets, &siblings[index])
+			}
+		}
 	}
-	if len(s.previewSecret) == 0 {
-		return dto.AdminPagePreviewTokenResponse{}, fmt.Errorf("预览令牌密钥未配置")
+	s.invalidatePageCache(ctx, targets...)
+}
+
+// invalidatePageCache 删除页面分片；缓存删除失败只记日志，不影响发布结果。
+func (s *PageService) invalidatePageCache(ctx context.Context, pages ...*models.Page) {
+	if s.cache == nil || !s.cache.Enabled() || len(pages) == 0 {
+		return
 	}
 
-	expiresAt := time.Now().Add(previewTokenTTL).Unix()
-	payload, err := json.Marshal(struct {
-		PageID    string `json:"page_id"`
-		Locale    string `json:"locale"`
-		ExpiresAt int64  `json:"exp"`
-	}{
-		PageID:    strconv.FormatUint(page.ID, 10),
-		Locale:    page.Locale,
-		ExpiresAt: expiresAt,
-	})
-	if err != nil {
-		return dto.AdminPagePreviewTokenResponse{}, fmt.Errorf("编码预览令牌失败：%w", err)
+	keys := make([]renderrepository.PageKey, 0, len(pages))
+	for _, page := range pages {
+		keys = append(keys, renderrepository.PageKey{
+			Locale: page.Locale,
+			Path:   page.Path,
+		})
 	}
-
-	return dto.AdminPagePreviewTokenResponse{
-		Token:     signPreviewPayload(s.previewSecret, payload),
-		ExpiresAt: expiresAt,
-	}, nil
+	if err := s.cache.InvalidatePage(ctx, keys...); err != nil {
+		hlog.CtxWarnf(ctx, "render cache: invalidate page: %v", err)
+	}
 }
 
 func (s *PageService) findPage(ctx context.Context, id uint64) (*models.Page, error) {
@@ -605,14 +631,4 @@ func toPageDraft(page *models.Page) (dto.AdminPageDraft, error) {
 		Blocks:    content.Blocks,
 		UpdatedAt: page.UpdatedAt,
 	}, nil
-}
-
-// signPreviewPayload 生成 base64url(payload).base64url(HMAC-SHA256)。
-func signPreviewPayload(secret []byte, payload []byte) string {
-	mac := hmac.New(sha256.New, secret)
-	_, _ = mac.Write(payload)
-	signature := mac.Sum(nil)
-	return base64.RawURLEncoding.EncodeToString(payload) +
-		"." +
-		base64.RawURLEncoding.EncodeToString(signature)
 }

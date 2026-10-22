@@ -104,9 +104,6 @@ export function normalizeSiteSettings(raw?: SiteSettingsInput | null): SiteSetti
   merged.footer = {
     ...base.footer,
     ...footer,
-    newsletterTitle: { ...base.footer.newsletterTitle, ...(footer.newsletterTitle ?? {}) },
-    newsletterNote: { ...base.footer.newsletterNote, ...(footer.newsletterNote ?? {}) },
-    statusText: { ...base.footer.statusText, ...(footer.statusText ?? {}) },
     cta: {
       ...base.footer.cta,
       ...(footer.cta ?? {}),

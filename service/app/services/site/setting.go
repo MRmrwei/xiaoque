@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloudwego/hertz/pkg/common/hlog"
+
+	renderrepository "suki/xqyun/app/repository/render"
 	settingrepository "suki/xqyun/app/repository/setting"
 )
 
@@ -30,11 +33,16 @@ var globalSettingKeys = map[string]struct{}{
 // SettingService 是站点配置用例服务。
 type SettingService struct {
 	settings *settingrepository.Repository
+	cache    *renderrepository.Cache
 }
 
 // NewSettingService 创建站点配置用例服务。
-func NewSettingService(settings *settingrepository.Repository) *SettingService {
-	return &SettingService{settings: settings}
+// cache 只在前台渲染缓存启用时生效，保存设置后按语言失效站点配置分片。
+func NewSettingService(
+	settings *settingrepository.Repository,
+	cache *renderrepository.Cache,
+) *SettingService {
+	return &SettingService{settings: settings, cache: cache}
 }
 
 // Get 读取指定语言的站点设置，全局项与语言级设置合并返回。
@@ -104,5 +112,29 @@ func (s *SettingService) Save(
 	if err := s.settings.UpsertMany(ctx, normalized, localized, operatorID, now); err != nil {
 		return nil, err
 	}
+	s.invalidateCache(ctx, normalized, len(global) > 0, len(localized) > 0)
 	return s.Get(ctx, normalized)
+}
+
+// invalidateCache 失效站点配置分片：全局项影响两种语言，语言级项只影响对应语言。
+func (s *SettingService) invalidateCache(
+	ctx context.Context,
+	locale string,
+	hasGlobal bool,
+	hasLocalized bool,
+) {
+	if s.cache == nil || !s.cache.Enabled() {
+		return
+	}
+
+	locales := make([]string, 0, 2)
+	if hasGlobal {
+		locales = append(locales, localeZH, localeEN)
+	}
+	if hasLocalized {
+		locales = append(locales, locale)
+	}
+	if err := s.cache.InvalidateSite(ctx, locales...); err != nil {
+		hlog.CtxWarnf(ctx, "render cache: invalidate site: %v", err)
+	}
 }

@@ -332,7 +332,6 @@ type AdminUser struct {
 | --- | --- | --- | --- |
 | `path` | string | 是 | 页面路径，如 `/about`、`/en/about-us` |
 | `locale` | string | 否 | 默认 `zh-CN` |
-| `preview_token` | string | 否 | 后台预览令牌，只允许读取草稿 |
 
 响应 `data`：
 
@@ -373,8 +372,9 @@ type AdminUser struct {
 - 只返回已发布页面；未发布或不存在返回 `40400`。
 - 数据源区块（新闻 / 产品 / 案例）由服务端按 `limit` 预取，前台不再逐块请求。
 - `alternates` 由 `translation_group_id` 计算，只包含已发布语言，供前台输出 hreflang 和语言切换；未发布语言不出现在 `alternates` 中。
-- 支持 `ETag` / `Cache-Control`，发布后失效。
-- 预览模式需要校验 token，且只对对应页面有效；token 建议使用带 `page_id` / `locale` / 过期时间的无状态签名，需要主动撤销时再落库。
+- 服务端按「页面（locale + path）/ 导航 / 站点配置」三个分片缓存到 Redis，未命中时查库回填；发布、下架、删除页面与保存导航、站点配置时主动失效，`render_cache.ttl`（默认 10 分钟）作为漏删兜底。`render_cache.enabled=false` 时每次都查库。
+- 暂未实现 `ETag` / `Cache-Control`。
+- 不提供草稿预览：后台预览由 `preview.html` + `postMessage` 在浏览器内完成，不经过该接口。
 
 ### 3.3 `GET /api/v1/frontend/render/content`
 
@@ -419,7 +419,7 @@ type AdminUser struct {
 - 请求未发布语言：`render/page` / `render/content` 返回 `40400`，前台输出 404 并设置 `noindex`。
 - `alternates`、hreflang 和 sitemap 只包含已发布语言，不指向未发布地址。
 - 语言切换只展示已发布译文；另一语言未发布时隐藏入口或退回该语言首页。
-- 后台草稿预览不受发布状态限制，但预览响应带 `X-Robots-Tag: noindex`，不进入 CDN 缓存。
+- 后台草稿预览在 `preview.html` iframe 内完成，不受发布状态限制，也不经过前台接口。
 - 后续发布另一语言后，该语言立即生效，`alternates` 与 sitemap 同步更新。
 
 ### 3.4 `GET /api/v1/frontend/contents`
@@ -497,7 +497,7 @@ type AdminUser struct {
 
 提交表单，例如 `POST /api/v1/frontend/forms/contact/submissions`。
 
-请求体：
+请求体（`email` 选填，`name` / `phone` / `message` 必填）：
 
 ```json
 {
@@ -505,7 +505,8 @@ type AdminUser struct {
   "email": "zhangsan@example.com",
   "company": "某某公司",
   "phone": "13800000000",
-  "message": "想了解产品"
+  "message": "想了解产品",
+  "locale": "zh-CN"
 }
 ```
 
@@ -523,10 +524,10 @@ type AdminUser struct {
 
 行为：
 
-- 服务端校验必填项、邮箱格式与长度。
-- 同一 IP 做频率限制，防止刷表单。
-- 落库 `xqyun_form_submissions`，`data` 保存完整表单内容。
-- 后续可触发邮件 / webhook 通知。
+- 已实现：控制器在 `app/handler/frontend/submission`，用例在 `app/services/submission.Submit`。
+- 服务端校验必填项（称呼 / 联系电话 / 留言）、邮箱格式与各字段长度；邮箱为空时不校验。
+- 落库 `xqyun_form_submissions`，`status = new`，`data` 保存完整表单内容，同时记录提交 IP 与 User-Agent。
+- 暂未实现同一 IP 频率限制；后续可补，并可触发邮件 / webhook 通知。
 
 ### 3.8 `GET /sitemap.xml`、`GET /robots.txt`
 
@@ -559,6 +560,21 @@ type AdminUser struct {
 - JWT 参数按客户端分组：`jwt.clients.admin` / `jwt.clients.frontend`，分别配置 `audience` / `token_type` / `access_ttl` / `refresh_ttl`；`issuer` 与密钥全局共享。
 - Refresh Token 不放在响应体，通过 HttpOnly Cookie 下发；前端无法读取，刷新 / 退出时由浏览器自动携带。Cookie 名、Path、Secure、SameSite 由 `jwt.cookie` 配置。
 - Redis 会话的 key 与值都带 `token_type`，用于区分管理后台与前台用户。
+- 每个用户的刷新令牌哈希同时维护在 `xqyun:refresh:user:{token_type}:{user_id}`（Set，TTL 与刷新令牌一致），用于改密 / 停用账号时批量吊销。
+
+### 4.1.1 当前管理员资料与密码
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| PUT | `/api/v1/admin/user/profile` | 修改显示名称、邮箱、手机号、头像 |
+| PUT | `/api/v1/admin/user/password` | 修改密码；成功后吊销该账号全部刷新令牌并清除 Cookie |
+
+说明：
+
+- 用户 ID 从 Access Token 的 `sub` 读取，前端不传，避免越权修改其他账号。
+- 改密成功后所有设备的刷新令牌失效，当前浏览器 Cookie 被清除，前端需清除本地会话并跳回登录页；未过期的 Access Token 仍可能有效，最长 15 分钟。
+- 资料字段校验：显示名称必填且不超过 100 字；邮箱可空、不超过 255 字且需符合格式；手机号可空、不超过 32 字；头像不超过 2MB。
+- OpenAPI 文档：`docs/open-api/backend/admin-user-profile-openapi.yaml`。
 
 ### 4.2 页面
 
@@ -572,7 +588,6 @@ type AdminUser struct {
 | POST | `/api/v1/admin/pages/:id/translate` | 创建 / 获取另一语言配对草稿 | `page:edit` |
 | POST | `/api/v1/admin/pages/:id/publish` | 发布当前草稿，覆盖线上内容 | `page:publish` |
 | POST | `/api/v1/admin/pages/:id/unpublish` | 下架：状态改为未发布，清空线上内容，草稿保留 | `page:publish` |
-| POST | `/api/v1/admin/pages/:id/preview-token` | 生成草稿预览令牌 | `page:read` |
 
 保存草稿请求体：
 
@@ -702,36 +717,45 @@ type AdminUser struct {
 
 ### 4.4 媒体
 
-| 方法 | 路径 | 作用 | 权限 |
-| --- | --- | --- | --- |
-| POST | `/api/v1/admin/media/upload` | 上传文件，`multipart/form-data` | `media:upload` |
-| GET | `/api/v1/admin/media` | 媒体列表，支持类型 / 关键词 / 分页 | `media:read` |
-| GET | `/api/v1/admin/media/:id` | 媒体详情 | `media:read` |
-| PUT | `/api/v1/admin/media/:id` | 修改多语言 alt | `media:upload` |
-| DELETE | `/api/v1/admin/media/:id` | 软删除，需检查引用 | `media:upload` |
+已实现（视频 / 图片）：
 
-上传响应：
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| POST | `/api/v1/admin/media/upload` | 上传素材，`multipart/form-data`，字段名 `file`，可选 `kind` |
+| GET | `/api/v1/admin/media` | 素材列表，支持 `kind`（`video` / `image`，留空为全部）/ `keyword` / `page` / `page_size` |
+| GET | `/api/v1/admin/media/:id` | 素材详情 |
+| PUT | `/api/v1/admin/media/:id` | 修改素材名称（`{ "original_name": "..." }`） |
+| DELETE | `/api/v1/admin/media/:id` | 软删除素材 |
+| DELETE | `/api/v1/admin/media?ids=1,2,3` | 批量软删除素材 |
+
+修改多语言 alt 尚未实现。`kind` 作为分类字段保留，后续可扩展其他类型。
+删除为软删除：数据库记录标记 `deleted_at`，物理文件保留，已引用该 URL 的页面不会失效。
+
+上传 / 列表响应字段：
 
 ```json
 {
-  "code": 0,
-  "message": "ok",
-  "data": {
-    "id": "501",
-    "url": "https://cdn.example.com/2026/10/xxx.webp",
-    "mime": "image/webp",
-    "size": 182300,
-    "width": 1600,
-    "height": 900
-  }
+  "id": "501",
+  "kind": "video",
+  "url": "http://127.0.0.1:8888/uploads/2026/10/xxx.mp4",
+  "filename": "2026/10/xxx.mp4",
+  "original_name": "产品演示.mp4",
+  "mime": "video/mp4",
+  "size": 182300,
+  "created_at": 1792647037
 }
 ```
 
-限制：
+限制与存储：
 
-- 图片最大 10 MB，服务端统一转 WebP，最长边 1600px。
-- 视频单独限制大小与时长。
-- 删除前检查是否仍被页面 / 内容引用。
+- 视频支持 MP4 / WebM / OGV / OGG / MOV / M4V，单文件默认最大 200MB（`upload.max_video_mb`）。
+- 图片支持 JPG / PNG / WebP / GIF / AVIF，单张默认最大 10MB（`upload.max_image_mb`）；暂不接收 SVG。
+- 上传逻辑抽象为 `services/media.Service`（`Uploader` + `Lister` + `Manager`），默认实现位于 `services/media/impl`；控制器只依赖接口，统一在 `handler/backend/media.newService` 装配。更换上传逻辑（转码、病毒扫描、云存储直传等）时新增一个实现并替换装配处即可。
+- 存储实现由 `upload.provider` 决定，当前仅 `local`；`repository/media.Storage` 是存储接口，后续可增加 OSS / COS / S3 实现，业务层不变。
+- 本地实现保存到 `upload.dir`（默认 `uploads`），按 `yyyy/mm` 分目录，静态访问路径为 `upload.url_prefix`（默认 `/uploads`），支持 Range。
+- 响应中的 `url` 由 `upload.public_base_url` 拼接完整地址；生产环境填官网域名 / CDN。
+- 页面里的图片统一从「内置图形 / 图片素材库」选择，页面区块只保存素材 URL；富文本插图也先上传素材库再插入 URL。
+- 删除为软删除（只标记 `deleted_at`，物理文件保留）；当前未检查页面引用。
 
 ### 4.5 菜单与站点设置
 
@@ -904,6 +928,22 @@ type AdminUser struct {
 - `app/repository/session`：Redis 登录会话（保存、按哈希查询、Lua 原子轮换、吊销）
 - `middleware/admin_auth.go`：管理后台 Bearer JWT 认证中间件
 - `hertz-contrib/logger/accesslog`：HTTP 访问日志，经 `hlog.CtxInfof` 输出
+
+业务接口（2026-10-22）：
+
+- 后台认证：`POST /admin/auth/refresh`、`POST /admin/auth/logout`
+- 管理员资料与改密：`PUT /admin/user/profile`、`PUT /admin/user/password`（改密后吊销该账号全部刷新令牌）
+- 站点编排：页面列表 / 新建 / 详情 / 保存草稿 / 删除 / 翻译配对 / 发布 / 下架，菜单列表 / 详情 / 整体保存，站点设置读取 / 保存
+- 表单留言：列表 / 详情 / 状态标记 / CSV 导出
+- 媒体素材：上传 / 列表 / 详情 / 重命名 / 单个删除 / 批量软删除（`xqyun_media`，本地磁盘 + Range 静态访问）
+- 前台：`GET /frontend/render/page`、`GET /frontend/site/config`、`GET /frontend/site/nav`、`POST /frontend/forms/:key/submissions`
+
+尚未实现：
+
+- `GET /admin/me`
+- 内容库与分类（`render/content`、`contents`、`categories`）
+- RBAC 角色权限与审计日志
+- 服务端图形验证码、登录限流、表单提交 IP 频率限制
 
 建议实现顺序：
 

@@ -10,9 +10,30 @@ import (
 
 // Config 聚合应用启动所需的基础设施配置。
 type Config struct {
-	DB    DBConfig
-	Redis RedisConfig
-	JWT   JWTConfig
+	DB          DBConfig
+	Redis       RedisConfig
+	JWT         JWTConfig
+	RenderCache RenderCacheConfig
+	Upload      UploadConfig
+}
+
+// UploadConfig 描述媒体文件存储。
+type UploadConfig struct {
+	// Provider 是存储实现，当前支持 local，后续可扩展对象存储。
+	Provider      string
+	Dir           string
+	URLPrefix     string
+	PublicBaseURL string
+	MaxVideoBytes int64
+	MaxImageBytes int64
+}
+
+// RenderCacheConfig 描述前台渲染数据（页面 / 导航 / 站点配置）的 Redis 缓存。
+type RenderCacheConfig struct {
+	// Enabled 为 false 时不读写缓存，所有请求直接查数据库。
+	Enabled bool
+	// TTL 是缓存有效期，作为失效逻辑漏删时的兜底。
+	TTL time.Duration
 }
 
 // JWTConfig 描述 JWT 签发方与各客户端令牌参数。
@@ -86,6 +107,12 @@ type Application interface {
 
 	// JWT 返回管理后台令牌签名配置。
 	JWT() JWTConfig
+
+	// RenderCache 返回前台渲染缓存配置。
+	RenderCache() RenderCacheConfig
+
+	// Upload 返回媒体上传与访问配置。
+	Upload() UploadConfig
 
 	// Close 释放数据库与 Redis 连接。
 	Close() error

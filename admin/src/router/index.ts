@@ -3,6 +3,7 @@ import AdminShell from '@/components/layout/AdminShell.vue'
 import PagesView from '@/views/PagesView.vue'
 import PageEditorView from '@/views/PageEditorView.vue'
 import SubmissionsView from '@/views/SubmissionsView.vue'
+import MediaView from '@/views/MediaView.vue'
 import BasicSettingsView from '@/views/BasicSettingsView.vue'
 import LoginSettingsView from '@/views/LoginSettingsView.vue'
 import AccountSettingsView from '@/views/AccountSettingsView.vue'
@@ -31,6 +32,12 @@ const router = createRouter({
           name: 'page-editor',
           component: PageEditorView,
           meta: { title: '站点编排' }
+        },
+        {
+          path: 'media',
+          name: 'media',
+          component: MediaView,
+          meta: { title: '素材管理' }
         },
         {
           path: 'submissions',

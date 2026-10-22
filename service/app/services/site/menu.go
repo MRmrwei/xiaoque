@@ -7,9 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cloudwego/hertz/pkg/common/hlog"
+
 	"suki/xqyun/app/dto"
 	"suki/xqyun/app/models"
 	menurepository "suki/xqyun/app/repository/menu"
+	renderrepository "suki/xqyun/app/repository/render"
 )
 
 // menuNames 是站点编排支持的菜单容器编码及默认名称。
@@ -36,11 +39,16 @@ var (
 // MenuService 是顶部 / 底部导航用例服务。
 type MenuService struct {
 	menus *menurepository.Repository
+	cache *renderrepository.Cache
 }
 
 // NewMenuService 创建导航菜单用例服务。
-func NewMenuService(menus *menurepository.Repository) *MenuService {
-	return &MenuService{menus: menus}
+// cache 只在前台渲染缓存启用时生效，保存菜单后失效导航分片。
+func NewMenuService(
+	menus *menurepository.Repository,
+	cache *renderrepository.Cache,
+) *MenuService {
+	return &MenuService{menus: menus, cache: cache}
 }
 
 // List 查询菜单容器列表。
@@ -107,7 +115,112 @@ func (s *MenuService) Save(
 	if _, err := s.menus.ReplaceItems(ctx, normalized, name, items, now); err != nil {
 		return dto.AdminMenuDetail{}, err
 	}
+	s.invalidateCache(ctx)
 	return s.Detail(ctx, normalized)
+}
+
+// navMenuCodes 是前台导航使用的三个菜单容器，顺序固定。
+var navMenuCodes = []string{"header", "footer", "footer_bottom"}
+
+// Nav 读取前台导航：顶部菜单、页脚栏目与底部链接。
+// 只返回可见项，文案按 locale 取值，缺失时回退中文。
+func (s *MenuService) Nav(ctx context.Context, locale string) (dto.SiteNav, error) {
+	normalized, err := normalizeLocale(locale, true)
+	if err != nil {
+		return dto.SiteNav{}, err
+	}
+
+	items := make(map[string][]dto.NavItem, len(navMenuCodes))
+	for _, code := range navMenuCodes {
+		navItems := []dto.NavItem{}
+
+		menu, err := s.menus.FindByCode(ctx, code)
+		switch {
+		case errors.Is(err, menurepository.ErrNotFound):
+			// 菜单容器还没保存过：前台按空导航渲染。
+		case err != nil:
+			return dto.SiteNav{}, err
+		default:
+			rows, findErr := s.menus.FindItems(ctx, menu.ID)
+			if findErr != nil {
+				return dto.SiteNav{}, findErr
+			}
+			navItems = buildPublicNavItems(rows, normalized)
+		}
+		items[code] = navItems
+	}
+
+	return dto.SiteNav{
+		Header:       items["header"],
+		Footer:       items["footer"],
+		FooterBottom: items["footer_bottom"],
+	}, nil
+}
+
+// buildPublicNavItems 把菜单项按 parent_id 组装成两级树，并过滤不可见项。
+func buildPublicNavItems(rows []models.MenuItem, locale string) []dto.NavItem {
+	children := make(map[uint64][]models.MenuItem)
+	roots := make([]models.MenuItem, 0, len(rows))
+	for _, item := range rows {
+		if item.ParentID == nil {
+			roots = append(roots, item)
+			continue
+		}
+		children[*item.ParentID] = append(children[*item.ParentID], item)
+	}
+
+	result := make([]dto.NavItem, 0, len(roots))
+	for _, root := range roots {
+		if root.Visible != 1 {
+			continue
+		}
+		node := toPublicNavItem(root, locale)
+		for _, child := range children[root.ID] {
+			if child.Visible != 1 {
+				continue
+			}
+			node.Children = append(node.Children, toPublicNavItem(child, locale))
+		}
+		result = append(result, node)
+	}
+	return result
+}
+
+// toPublicNavItem 把菜单项转换为前台结构，文案缺失时回退中文。
+func toPublicNavItem(item models.MenuItem, locale string) dto.NavItem {
+	labels := make(map[string]string)
+	if len(item.Label) > 0 {
+		_ = json.Unmarshal(item.Label, &labels)
+	}
+	label := strings.TrimSpace(labels[locale])
+	if label == "" {
+		label = strings.TrimSpace(labels["zh-CN"])
+	}
+
+	path := ""
+	if item.LinkValue != nil {
+		path = *item.LinkValue
+	}
+
+	return dto.NavItem{
+		ID:       strconv.FormatUint(item.ID, 10),
+		Label:    label,
+		Path:     path,
+		LinkType: item.LinkType,
+		Target:   item.Target,
+		Visible:  item.Visible == 1,
+		Sort:     item.Sort,
+	}
+}
+
+// invalidateCache 删除所有语言的导航分片；失败只记日志，不影响保存结果。
+func (s *MenuService) invalidateCache(ctx context.Context) {
+	if s.cache == nil || !s.cache.Enabled() {
+		return
+	}
+	if err := s.cache.InvalidateNav(ctx); err != nil {
+		hlog.CtxWarnf(ctx, "render cache: invalidate nav: %v", err)
+	}
 }
 
 func normalizeMenuCode(code string) (string, error) {

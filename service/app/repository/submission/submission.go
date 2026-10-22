@@ -140,6 +140,17 @@ func (r *Repository) StatusCounts(ctx context.Context, filter Filter) (StatusCou
 	return counts, nil
 }
 
+// Create 保存一条新的表单留言。
+func (r *Repository) Create(ctx context.Context, row *models.FormSubmission) error {
+	if r.db == nil {
+		return fmt.Errorf("数据访问层：数据库未初始化")
+	}
+	if err := r.db.WithContext(ctx).Create(row).Error; err != nil {
+		return fmt.Errorf("保存留言失败：%w", err)
+	}
+	return nil
+}
+
 // UpdateStatus 更新留言处理状态与处理时间。
 func (r *Repository) UpdateStatus(ctx context.Context, id uint64, status string, now int64) error {
 	if r.db == nil {

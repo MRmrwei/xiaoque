@@ -161,6 +161,22 @@ select {
   color: rgba(246, 242, 234, 0.35);
 }
 
+/* 待处理留言红点：有数量才显示，超过 99 显示 99+。 */
+.side-badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--adm-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .avatar {
   width: 30px;
   height: 30px;
@@ -394,10 +410,19 @@ select {
   font-weight: 600;
 }
 
-.page-name span {
+.page-path {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--adm-mono);
-  font-size: 9px;
-  color: var(--adm-muted-2);
+  font-size: 12px;
+  color: var(--adm-muted);
+}
+
+.page-path:hover {
+  color: var(--adm-ink);
 }
 
 .mono {

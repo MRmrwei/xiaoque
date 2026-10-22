@@ -6,6 +6,7 @@ export function useLocaleSwitch() {
   const route = useRoute()
   const localePath = useLocalePath()
   const switchLocalePath = useSwitchLocalePath()
+  const alternates = useState<Record<string, string>>('page-alternates', () => ({}))
 
   async function switchTo(target: Locale) {
     if (target === locale.value) return
@@ -21,6 +22,13 @@ export function useLocaleSwitch() {
           ? localePath(`/news/${counterpart.slug}`, target)
           : localePath('/news', target)
       )
+      return
+    }
+
+    // 页面路径按语言独立配置时使用接口返回的 alternates；未发布译文不出现。
+    const alternatePath = alternates.value[target]
+    if (alternatePath) {
+      await navigateTo(localePath(alternatePath, target))
       return
     }
 

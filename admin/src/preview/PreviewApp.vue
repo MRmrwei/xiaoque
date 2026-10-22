@@ -3,14 +3,18 @@
     <template v-if="page && settings">
       <PreviewChrome :settings="settings" :locale="locale" />
       <main class="preview-page page-canvas">
-        <BlockRenderer
+        <div
           v-for="block in page.blocks"
           :key="block.id"
-          :block="block"
-          :locale="locale"
-          :collections="collections"
-          preview
-        />
+          :data-preview-block="block.id"
+        >
+          <BlockRenderer
+            :block="block"
+            :locale="locale"
+            :collections="collections"
+            preview
+          />
+        </div>
         <div v-if="!page.blocks.length" class="preview-empty">
           这个页面还是空的，在左侧添加一个区块试试。
         </div>
@@ -25,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import type { Locale, PageRecord, SiteCollections, SiteSettings } from '~/domain/types'
 import BlockRenderer from '~/components/blocks/BlockRenderer.vue'
 import PreviewChrome from './PreviewChrome.vue'
@@ -38,6 +42,7 @@ const locale = ref<Locale>('zh')
 const collections = ref<SiteCollections>({ news: [], products: [], cases: [] })
 const settings = ref<SiteSettings | null>(null)
 let lastRevision = -1
+let lastFocusToken = 0
 
 // 品牌变量写到根节点，让 body、页脚与所有区块共享同一套配色。
 watchEffect(() => {
@@ -57,6 +62,8 @@ function onMessage(event: MessageEvent) {
         locale?: Locale
         collections?: SiteCollections
         settings?: SiteSettings
+        focusBlockId?: string
+        focusToken?: number
       }
     | undefined
   if (!data || data.type !== 'xq-preview:update') return
@@ -70,6 +77,24 @@ function onMessage(event: MessageEvent) {
   }
   if (data.collections) collections.value = data.collections
   if (data.settings) settings.value = data.settings
+
+  // 点击左侧区块时滚动到对应位置；token 相同说明只是内容更新，不重复滚动。
+  const token = typeof data.focusToken === 'number' ? data.focusToken : 0
+  if (
+    data.focusBlockId &&
+    typeof data.focusToken === 'number' &&
+    token !== lastFocusToken
+  ) {
+    lastFocusToken = token
+    nextTick(() => scrollToBlock(data.focusBlockId as string))
+  }
+}
+
+function scrollToBlock(blockId: string) {
+  const target = document.querySelector<HTMLElement>(
+    `[data-preview-block="${blockId}"]`
+  )
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 onMounted(() => {

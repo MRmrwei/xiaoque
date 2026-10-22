@@ -3,7 +3,7 @@
     <div class="container not-found-inner">
       <div class="not-found-code mono">{{ t('notfound.code') }}</div>
       <div class="not-found-art">
-        <BrandMark :size="72" />
+        <BrandMark :size="72" :image="settings.brand.logo" />
         <span class="flight-path" aria-hidden="true" />
       </div>
       <h1>{{ t('notfound.title') }}</h1>
@@ -12,16 +12,6 @@
         <NuxtLink :to="localePath('/')" class="btn btn--primary">
           {{ t('common.backHome') }} <span class="arr">↗</span>
         </NuxtLink>
-        <NuxtLink :to="localePath('/contact')" class="btn btn--ghost">
-          {{ t('common.contactUs') }}
-        </NuxtLink>
-      </div>
-      <div class="not-found-links">
-        <span class="mono">POPULAR</span>
-        <NuxtLink :to="localePath('/products')">{{ t('nav.products') }}</NuxtLink>
-        <NuxtLink :to="localePath('/cases')">{{ t('nav.cases') }}</NuxtLink>
-        <NuxtLink :to="localePath('/news')">{{ t('nav.news') }}</NuxtLink>
-        <NuxtLink :to="localePath('/about')">{{ t('nav.about') }}</NuxtLink>
       </div>
     </div>
   </section>
@@ -29,10 +19,12 @@
 
 <script setup lang="ts">
 import BrandMark from '~/components/BrandMark.vue'
+import { useSiteChrome } from '~/composables/useSiteChrome'
 import { useUiText } from '~/composables/useUiText'
 
 const { t } = useUiText()
 const localePath = useLocalePath()
+const { settings } = useSiteChrome()
 </script>
 
 <style scoped>
@@ -116,30 +108,4 @@ const localePath = useLocalePath()
   margin-top: 30px;
 }
 
-.not-found-links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-  margin-top: 46px;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
-  font-size: 13px;
-}
-
-.not-found-links .mono {
-  font-size: 9px;
-  letter-spacing: 0.16em;
-  color: var(--muted-2);
-}
-
-.not-found-links a {
-  color: var(--muted);
-  transition: color 0.2s ease;
-}
-
-.not-found-links a:hover {
-  color: var(--accent);
-}
 </style>

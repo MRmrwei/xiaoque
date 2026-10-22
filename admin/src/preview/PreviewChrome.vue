@@ -20,7 +20,7 @@
           <BrandMark :size="28" :image="settings.brand.logo" />
           <span class="pv-brand-text">
             <strong>{{ settings.siteName[locale] }}</strong>
-            <span>MAGPIE CLOUD</span>
+            <span>{{ settings.siteName.en }}</span>
           </span>
         </div>
         <nav class="pv-nav">

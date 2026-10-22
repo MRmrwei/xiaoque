@@ -17,6 +17,7 @@
 <script setup lang="ts">
 import type { NuxtError } from '#app'
 import NotFoundContent from '~/components/NotFoundContent.vue'
+import { useSiteChrome } from '~/composables/useSiteChrome'
 
 const props = defineProps<{
   error: NuxtError
@@ -24,15 +25,19 @@ const props = defineProps<{
 
 const isNotFound = computed(() => props.error.statusCode === 404)
 const isEnglish = computed(() => useRoute().path.startsWith('/en'))
+const { settings } = useSiteChrome()
+const siteName = computed(() => settings.value.siteName[isEnglish.value ? 'en' : 'zh'])
 
 useHead({
-  title: isNotFound.value
-    ? isEnglish.value
-      ? 'Page not found · Magpie Cloud'
-      : '页面未找到 · 小鹊云'
-    : isEnglish.value
-      ? 'Something went wrong · Magpie Cloud'
-      : '页面出错了 · 小鹊云'
+  title: computed(() =>
+    isNotFound.value
+      ? isEnglish.value
+        ? `Page not found · ${siteName.value}`
+        : `页面未找到 · ${siteName.value}`
+      : isEnglish.value
+        ? `Something went wrong · ${siteName.value}`
+        : `页面出错了 · ${siteName.value}`
+  )
 })
 
 function handleError() {

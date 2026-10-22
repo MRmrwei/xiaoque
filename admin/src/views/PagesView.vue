@@ -79,7 +79,7 @@
         row-key="id"
         @row-dblclick="openEditor"
       >
-        <el-table-column label="页面" min-width="250">
+        <el-table-column label="页面" min-width="200">
           <template #default="{ row }">
             <div class="page-cell">
               <span class="page-icon" :class="{ 'is-en': row.locale === 'en' }">
@@ -87,9 +87,14 @@
               </span>
               <span class="page-name">
                 <strong>{{ row.name }}</strong>
-                <span>{{ fullPath(row) }}</span>
               </span>
             </div>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="路径" min-width="200">
+          <template #default="{ row }">
+            <span class="page-path" :title="fullPath(row)">{{ fullPath(row) }}</span>
           </template>
         </el-table-column>
 

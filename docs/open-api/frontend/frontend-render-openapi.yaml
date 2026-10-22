@@ -1,0 +1,526 @@
+openapi: 3.0.3
+info:
+  title: 小鹊云官网前台 API
+  version: 1.0.0
+  license:
+    name: Proprietary
+  description: |
+    小鹊云 Go 后端（CloudWeGo Hertz）官网前台公开接口，供 Nuxt 3 SSR 官网读取页面、导航与站点配置。
+
+    通用约定：
+    - 所有响应 HTTP 状态码统一为 200，成功与失败通过响应体中的 `code` 判断：`0` 成功，`40000` 参数错误，`40400` 页面不存在 / 未发布，`50000` 服务端错误。
+    - 接口公开，不需要 `Authorization`。
+    - JSON 中 ID 统一为字符串；时间字段为 Unix 时间戳（秒）。
+    - 只返回已发布内容；页面未发布或不存在时 `render/page` 返回 `40400`，前台输出 404 + `noindex`。
+    - 服务端按「页面 / 导航 / 站点配置」分片缓存到 Redis；发布、下架、保存导航与站点配置后主动失效。
+    - 新闻 / 产品 / 案例内容库尚未实现，暂未收录；表单提交见 `POST /forms/{key}/submissions`。
+servers:
+  - url: http://127.0.0.1:8888
+    description: 本地开发
+tags:
+  - name: 页面渲染
+    description: 页面内容与区块
+  - name: 站点数据
+    description: 头部 / 页脚使用的站点配置与导航
+  - name: 表单提交
+    description: 官网公开表单写入后台「表单留言」
+
+paths:
+  /api/v1/frontend/render/page:
+    get:
+      tags: [页面渲染]
+      operationId: renderFrontendPage
+      summary: 获取页面渲染数据
+      description: |
+        按路径聚合已发布页面、导航、站点配置与数据源集合，服务端一次返回，前台不再逐区块请求。
+
+        - `path` 必填，需与后台页面路径完全一致（含前导 `/`），例如 `/about`、`/en/about-us`。
+        - `locale` 决定返回的字段与导航文案语言，默认 `zh-CN`。
+        - 页面不存在或未发布返回 `40400`。
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: 页面路径
+          schema:
+            type: string
+            example: /about
+        - $ref: '#/components/parameters/LocaleQuery'
+      responses:
+        '200':
+          description: |
+            页面渲染数据。`code = 0` 成功；`40000` 参数错误；`40400` 页面不存在或未发布；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderPageApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  page:
+                    id: '10'
+                    group_id: 01J8Z4K2M9WQ6N3P5R7T8V2X1C
+                    locale: zh-CN
+                    path: /about
+                    name: 关于我们
+                    seo:
+                      title: 关于我们 · 小鹊云
+                      description: 小鹊云团队与产品故事。
+                      keywords: [小鹊云]
+                    blocks: []
+                    version: 3
+                    published_at: 1792375200
+                    published_by: 小阙
+                    alternates:
+                      zh-CN: /about
+                      en: /en/about-us
+                  nav:
+                    header: []
+                    footer: []
+                    footer_bottom: []
+                  site: {}
+                  collections:
+                    news: []
+                    products: []
+                    cases: []
+
+  /api/v1/frontend/site/config:
+    get:
+      tags: [站点数据]
+      operationId: getFrontendSiteConfig
+      summary: 获取站点配置
+      description: |
+        返回脱敏后的站点配置，供头部 / 页脚、品牌色与收录开关使用。
+
+        - 全局配置与语言级配置合并，同 key 时语言级覆盖全局。
+        - 不包含统计代码的执行结果、后台专属数据等敏感内容。
+        - 数据来源为 `xqyun_settings`，缺失的 key 不会出现在响应中。
+      parameters:
+        - $ref: '#/components/parameters/LocaleQuery'
+      responses:
+        '200':
+          description: |
+            站点配置。`code = 0` 成功；`40000` 语言参数错误；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteConfigApiResponse'
+
+  /api/v1/frontend/site/nav:
+    get:
+      tags: [站点数据]
+      operationId: getFrontendSiteNav
+      summary: 获取顶部与底部导航
+      description: |
+        返回三个菜单容器：顶部菜单、页脚栏目、页脚底部链接。
+
+        - 只返回 `visible = true` 的菜单项。
+        - 文案已按 `locale` 取好；该语言缺失时回退中文。
+        - 页脚顶级项是栏目，`children` 是栏目内链接。
+      parameters:
+        - $ref: '#/components/parameters/LocaleQuery'
+      responses:
+        '200':
+          description: |
+            导航数据。`code = 0` 成功；`40000` 语言参数错误；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteNavApiResponse'
+
+  /api/v1/frontend/forms/{key}/submissions:
+    post:
+      tags: [表单提交]
+      operationId: submitFrontendForm
+      summary: 提交表单留言
+      description: |
+        官网联系表单提交入口，`key` 为表单标识，当前使用 `contact`。
+
+        - `name` / `phone` / `message` 必填，`email` 选填但填写后需符合邮箱格式。
+        - 服务端写入 `xqyun_form_submissions`，后台「线索 → 表单留言」可见；`data` 保存完整表单内容。
+        - 记录提交 IP 与 User-Agent；当前未做 IP 频率限制。
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: 表单标识
+          schema:
+            type: string
+            example: contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, phone, message]
+              properties:
+                name:
+                  type: string
+                  example: 张三
+                email:
+                  type: string
+                  example: zhangsan@example.com
+                company:
+                  type: string
+                  example: 某某公司
+                phone:
+                  type: string
+                  example: '13800000000'
+                message:
+                  type: string
+                  example: 想了解产品
+                locale:
+                  type: string
+                  enum: [zh-CN, en]
+                  default: zh-CN
+      responses:
+        '200':
+          description: |
+            提交结果。`code = 0` 成功并返回留言 ID；`40000` 参数错误；`50000` 服务端错误。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: ok
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: '9001'
+
+components:
+  parameters:
+    LocaleQuery:
+      name: locale
+      in: query
+      required: false
+      description: 语言，默认 `zh-CN`
+      schema:
+        type: string
+        enum: [zh-CN, en]
+        default: zh-CN
+
+  schemas:
+    ApiEnvelope:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: 业务码，0 表示成功
+          example: 0
+        message:
+          type: string
+          description: 提示信息
+          example: ok
+        data:
+          nullable: true
+          description: 业务数据
+
+    SEO:
+      type: object
+      required: [title, description, keywords]
+      properties:
+        title:
+          type: string
+          description: 页面标题
+        description:
+          type: string
+          description: 页面描述
+        keywords:
+          type: array
+          items:
+            type: string
+          description: 关键词，未配置时为空数组
+
+    PageBlock:
+      type: object
+      required: [id, type, props]
+      properties:
+        id:
+          type: string
+          description: 区块 ID
+          example: blk_01j8z4k2m9
+        type:
+          type: string
+          description: 区块类型，如 hero、richtext、products
+          example: hero
+        props:
+          type: object
+          additionalProperties: true
+          description: 区块属性，结构与前台区块组件一一对应
+
+    PublishedPage:
+      type: object
+      required:
+        - id
+        - group_id
+        - locale
+        - path
+        - name
+        - seo
+        - blocks
+        - version
+        - published_at
+        - published_by
+        - alternates
+      properties:
+        id:
+          type: string
+          description: 页面 ID
+        group_id:
+          type: string
+          description: 翻译组 ID，中英文版本共用
+        locale:
+          type: string
+          enum: [zh-CN, en]
+          description: 页面语言
+        path:
+          type: string
+          description: 页面路径
+          example: /about
+        name:
+          type: string
+          description: 后台页面名称
+        seo:
+          $ref: '#/components/schemas/SEO'
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+          description: 线上区块列表
+        version:
+          type: integer
+          description: 发布版本号，每次发布 +1
+          example: 3
+        published_at:
+          type: integer
+          format: int64
+          description: 发布时间（Unix 秒）；当前取页面最后更新时间，表结构暂无独立的 published_at 字段
+        published_by:
+          type: string
+          description: 最后发布人显示名称，可能为空
+        alternates:
+          type: object
+          description: 已发布语言对应的路径；未发布语言不出现
+          additionalProperties:
+            type: string
+          example:
+            zh-CN: /about
+            en: /en/about-us
+
+    NavItem:
+      type: object
+      required: [id, label, path, link_type, target, visible, sort]
+      properties:
+        id:
+          type: string
+          description: 菜单项 ID
+        label:
+          type: string
+          description: 已按 locale 取好的文案；该语言为空时回退中文
+        path:
+          type: string
+          description: 跳转路径；`link_type = none` 时为空字符串
+        link_type:
+          type: string
+          enum: [page, content, external, none]
+          description: 链接类型
+        target:
+          type: string
+          enum: [_self, _blank]
+          description: 打开方式
+        visible:
+          type: boolean
+          description: 是否可见；接口只返回可见项，恒为 true
+        sort:
+          type: integer
+          description: 排序值
+        children:
+          type: array
+          description: 子项；仅页脚栏目会返回
+          items:
+            $ref: '#/components/schemas/NavItem'
+
+    SiteNav:
+      type: object
+      required: [header, footer, footer_bottom]
+      properties:
+        header:
+          type: array
+          description: 顶部导航
+          items:
+            $ref: '#/components/schemas/NavItem'
+        footer:
+          type: array
+          description: 页脚栏目，顶级项是栏目，children 是栏目内链接
+          items:
+            $ref: '#/components/schemas/NavItem'
+        footer_bottom:
+          type: array
+          description: 页脚底部链接
+          items:
+            $ref: '#/components/schemas/NavItem'
+
+    RenderPageData:
+      type: object
+      required: [page, nav, site, collections]
+      properties:
+        page:
+          $ref: '#/components/schemas/PublishedPage'
+        nav:
+          $ref: '#/components/schemas/SiteNav'
+        site:
+          type: object
+          additionalProperties: true
+          description: 脱敏后的站点配置，与 `site/config` 结构一致
+        collections:
+          type: object
+          description: 数据源区块集合；内容库尚未上线，当前固定为空数组
+          properties:
+            news:
+              type: array
+              items:
+                type: object
+            products:
+              type: array
+              items:
+                type: object
+            cases:
+              type: array
+              items:
+                type: object
+
+    LocaleText:
+      type: object
+      description: 中英文文案，键为 `zh` / `en`（兼容旧的 `zh-CN`），缺失语言为空字符串
+      properties:
+        zh:
+          type: string
+        en:
+          type: string
+        zh-CN:
+          type: string
+
+    BrandSettings:
+      type: object
+      properties:
+        logo:
+          type: string
+          description: Logo，data URL 或远程地址；为空时前台使用内置图标
+        accent:
+          type: string
+          description: 品牌主色，十六进制
+          example: '#E8503A'
+        background:
+          type: string
+          description: 页面底色，十六进制
+          example: '#F6F2EA'
+        darkBackground:
+          type: string
+          description: 深色区块 / 页脚底色，十六进制
+          example: '#141518'
+
+    SiteConfig:
+      type: object
+      description: 站点配置；所有 key 都可能缺失，前台按默认值降级
+      additionalProperties: true
+      properties:
+        locale:
+          type: string
+          enum: [zh-CN, en]
+          description: 本次返回的语言
+        site_name:
+          $ref: '#/components/schemas/LocaleText'
+        company_name:
+          $ref: '#/components/schemas/LocaleText'
+        tagline:
+          $ref: '#/components/schemas/LocaleText'
+        contact:
+          type: object
+          properties:
+            email:
+              type: string
+            phone:
+              type: string
+            phone_en:
+              type: string
+            address:
+              $ref: '#/components/schemas/LocaleText'
+            work_hours:
+              $ref: '#/components/schemas/LocaleText'
+        copyright:
+          $ref: '#/components/schemas/LocaleText'
+        icp:
+          type: string
+          description: ICP 备案号
+        socials:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              handle:
+                type: string
+        brand:
+          $ref: '#/components/schemas/BrandSettings'
+        header:
+          type: object
+          description: 头部配置（公告条、按钮、语言入口、吸顶）
+          additionalProperties: true
+        footer:
+          type: object
+          description: 页脚配置（订阅区、联系入口、大字标、版权）；栏目与底部链接见 `site/nav`
+          additionalProperties: true
+        default_locale:
+          type: string
+          enum: [zh, en]
+        allow_index:
+          type: boolean
+          description: 搜索引擎收录开关；false 时前台输出 noindex
+        seo:
+          type: object
+          properties:
+            analytics:
+              type: string
+              description: 统计代码说明 / 标识
+            head_code:
+              type: string
+              description: 自定义 head 代码；前台按安全策略决定是否输出
+
+    RenderPageApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/RenderPageData'
+
+    SiteConfigApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/SiteConfig'
+
+    SiteNavApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/SiteNav'

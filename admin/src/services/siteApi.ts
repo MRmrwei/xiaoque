@@ -107,11 +107,6 @@ export interface ApiPagePublishResult {
   published_at: number
 }
 
-export interface ApiPreviewToken {
-  token: string
-  expires_at: number
-}
-
 export interface ApiMenuItem {
   id?: string
   label: Record<string, string>
@@ -203,12 +198,6 @@ export function unpublishPage(
   return api.post<void>(
     `${ADMIN_PREFIX}/pages/${encodeURIComponent(id)}/unpublish`,
     body
-  )
-}
-
-export function createPreviewToken(id: string): Promise<ApiPreviewToken> {
-  return api.post<ApiPreviewToken>(
-    `${ADMIN_PREFIX}/pages/${encodeURIComponent(id)}/preview-token`
   )
 }
 

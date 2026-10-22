@@ -43,12 +43,6 @@ export const settings: SiteSettings = {
     ]
   },
   footer: {
-    showNewsletter: true,
-    newsletterTitle: { zh: '订阅小鹊通讯', en: 'Magpie letter' },
-    newsletterNote: {
-      zh: '每月一封，关于内容、设计与增长。',
-      en: 'One letter a month on content, design and growth.'
-    },
     showContact: true,
     cta: {
       label: { zh: '预约演示', en: 'Book a demo' },
@@ -56,8 +50,6 @@ export const settings: SiteSettings = {
     },
     showWordmark: true,
     wordmark: 'MAGPIE',
-    showStatus: true,
-    statusText: { zh: '所有系统运行正常', en: 'All systems operational' },
     columns: [
       {
         key: 'footer.col.products',

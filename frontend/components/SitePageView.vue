@@ -8,6 +8,7 @@ import NotFoundContent from '~/components/NotFoundContent.vue'
 import PageRenderer from '~/components/PageRenderer.vue'
 import { usePageContent } from '~/composables/usePageContent'
 import { usePageSeo } from '~/composables/usePageSeo'
+import { useSiteChrome } from '~/composables/useSiteChrome'
 import { useUiText } from '~/composables/useUiText'
 
 const props = defineProps<{
@@ -15,18 +16,24 @@ const props = defineProps<{
 }>()
 
 const { locale } = useUiText()
+const { settings } = useSiteChrome()
 const { page, collections } = await usePageContent(props.path)
 const currentPage = page.value
 
 if (currentPage) {
-  usePageSeo({ page: currentPage, path: currentPage.path })
+  usePageSeo({
+    page: currentPage,
+    path: currentPage.path,
+    alternates: currentPage.alternates
+  })
 } else {
   if (import.meta.server) {
     const event = useRequestEvent()
     if (event) setResponseStatus(event, 404)
   }
+  const siteName = settings.value.siteName[locale.value]
   usePageSeo({
-    title: locale.value === 'en' ? 'Page not found · Magpie Cloud' : '页面未找到 · 小鹊云',
+    title: locale.value === 'en' ? `Page not found · ${siteName}` : `页面未找到 · ${siteName}`,
     description:
       locale.value === 'en'
         ? 'The page you are looking for may have moved, or never existed.'

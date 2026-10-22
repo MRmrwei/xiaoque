@@ -53,6 +53,46 @@ docker compose up -d
 
 初始管理员 `admin` / `123456`，登录后请立即修改密码。
 
+## 连接数据库（图形客户端）
+
+MySQL 只映射到宿主机回环地址，公网无法直接访问，需要通过 SSH 隧道：
+
+```text
+数据流：Navicat → SSH 加密 → 服务器 127.0.0.1:3306 → mysql 容器:3306
+```
+
+先确认映射已生效（应只显示 `127.0.0.1:3306`）：
+
+```bash
+docker compose ps mysql
+ss -lnt | grep 3306
+```
+
+**方式一：客户端自带 SSH 隧道（Navicat / DBeaver / DataGrip）**
+
+- SSH 页签：主机填服务器 IP，端口 `22`，填 SSH 用户名与密码 / 私钥
+- 数据库页签：
+  - 主机 `127.0.0.1`
+  - 端口 `3306`
+  - 用户 `xqyun`
+  - 密码为 `.env` 里的 `MYSQL_PASSWORD`
+  - 数据库 `xqyun`
+
+**方式二：命令行建隧道**
+
+```bash
+ssh -N -L 13306:127.0.0.1:3306 用户名@服务器IP
+```
+
+然后客户端连 `127.0.0.1:13306`（不用再配 SSH 页签）。
+
+**说明**
+
+- 不要用 `root` 远程连接：官方镜像的 root 默认只允许本机登录；日常使用 `xqyun` 账号即可。
+- 如果宿主机 3306 已被占用，在 `.env` 增加 `MYSQL_HOST_PORT=3307`，隧道与客户端端口同步改成 3307。
+- 修改映射后执行 `docker compose up -d mysql` 重建容器生效；数据在 `data/mysql`，不会丢失。
+- **不要把端口改成 `3306:3306` 或 `0.0.0.0`**，那会把数据库直接暴露到公网。
+
 ## 说明
 
 - 使用官方镜像：`nginx:1.27-alpine`、`node:22-alpine`、`alpine:3.22`、`mysql:8.0`、`redis:7-alpine`、`migrate/migrate:v4.18.3`，首次启动会自动拉取。

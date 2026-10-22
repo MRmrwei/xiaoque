@@ -1,7 +1,7 @@
 # 小鹊云 MySQL 数据库表设计
 
 > 数据库：`xqyun`（与 `service/config.yaml` 一致）
-> 状态：设计稿。当前 `service/` 已完成 MySQL / Redis 连接与配置加载，业务表尚未创建；数据库初始化脚本见 `deploy/init.sql`。
+> 状态：已落地。业务表由 `migration/` 下的 golang-migrate 脚本创建，建库脚本见 `deploy/init.sql`；表结构以迁移文件为准。
 
 ## 1. 基本约定
 

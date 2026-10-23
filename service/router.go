@@ -3,10 +3,11 @@
 package main
 
 import (
+	"context"
+	pkg_app "github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/hertz-contrib/logger/accesslog"
-
 	"suki/xqyun/app/core/application"
 	handler "suki/xqyun/app/handler"
 	"suki/xqyun/router"
@@ -18,6 +19,12 @@ func customizedRegister(r *server.Hertz, app application.Application) {
 		accesslog.WithFormat("[${time}] ${status} - ${latency} ${clientIP} ${method} ${path} ${queryParams}"),
 		accesslog.WithTimeFormat("2006-01-02 15:04:05"),
 		accesslog.WithAccessLogFunc(hlog.CtxInfof),
+		accesslog.WithLogConditionFunc(func(ctx context.Context, c *pkg_app.RequestContext) bool {
+			if c.FullPath() == "/ping" {
+				return false
+			}
+			return true
+		}),
 	))
 
 	r.GET("/ping", handler.NewPingController(app).Ping)

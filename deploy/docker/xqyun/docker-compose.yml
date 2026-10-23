@@ -136,9 +136,9 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "3000"
+      # SSR 与浏览器侧 /api/backend/** 代理共用，运行期生效，不需要重新构建。
       NUXT_API_BASE: http://backend:8888/api/v1
       NUXT_PUBLIC_API_BASE: /api/backend
-      NUXT_API_TARGET: http://backend:8888
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - ./data/release/frontend/.output:/app/.output:ro

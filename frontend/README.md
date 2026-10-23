@@ -68,12 +68,11 @@ http://127.0.0.1:8888/api/v1
 
 | 变量 | 作用 | 默认值 |
 | --- | --- | --- |
-| `NUXT_API_BASE` | 服务端 SSR 请求 Go API 的地址 | `http://127.0.0.1:8888/api/v1` |
+| `NUXT_API_BASE` | 服务端 SSR 与 Nitro `/api/backend/**` 代理共用的 Go API 地址，运行期生效 | `http://127.0.0.1:8888/api/v1` |
 | `NUXT_PUBLIC_API_BASE` | 浏览器侧 API 前缀 | `/api/backend` |
-| `NUXT_API_TARGET` | Nitro `/api/backend/**` 代理目标，构建时写入 | `http://127.0.0.1:8888` |
 | `NUXT_SHARE` | 设为 `1` 时使用内置演示数据并生成分享版 | 未设置 |
 
-浏览器请求 `/api/backend/**`，由 Nitro 代理到 Go 后端，避免跨域。
+浏览器请求 `/api/backend/**`，由 `server/routes/api/backend/[...path].ts` 在运行期代理到 `NUXT_API_BASE`，避免跨域。代理目标不写进构建产物，Docker 里设 `NUXT_API_BASE=http://backend:8888/api/v1` 即可，无需重新构建。
 
 ## 路由与多语言
 

@@ -56,11 +56,8 @@ export default defineNuxtConfig({
       useMockData: share
     }
   },
-  routeRules: {
-    '/api/backend/**': {
-      proxy: `${process.env.NUXT_API_TARGET || 'http://127.0.0.1:8888'}/api/v1/**`
-    }
-  },
+  // 浏览器侧的 /api/backend/** 由 server/routes/api/backend/[...path].ts 在运行期代理，
+  // 目标取 runtimeConfig.apiBase；不要用 routeRules.proxy，那会把地址写死在构建产物里。
   ...(share
     ? {
         nitro: {

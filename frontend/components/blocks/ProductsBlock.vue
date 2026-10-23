@@ -45,10 +45,6 @@
                   <UiIcon name="check" :size="11" /> {{ point }}
                 </span>
               </span>
-              <span v-if="card.linkLabel || defaultCardLabel" class="product-link product-link--static">
-                {{ card.linkLabel || defaultCardLabel }}
-                <UiIcon name="arrow" :size="14" />
-              </span>
             </span>
           </BlockLink>
         </template>
@@ -76,7 +72,7 @@
               </li>
             </ul>
             <button class="product-link" @click="openProduct(product)">
-              {{ defaultCardLabel }}
+              {{ cardButtonLabel }}
               <UiIcon name="arrow" :size="14" />
             </button>
           </div>
@@ -98,8 +94,8 @@
               <UiIcon name="check" :size="12" /> {{ point }}
             </li>
           </ul>
-          <BlockLink :href="data.modalCtaHref || localePath('/contact')" class="btn btn--primary">
-            {{ data.modalCtaLabel || (locale === 'en' ? 'Book a demo' : '预约演示') }}
+          <BlockLink :href="localePath('/contact')" class="btn btn--primary">
+            {{ modalCtaLabel }}
             <span class="arr">↗</span>
           </BlockLink>
         </div>
@@ -134,8 +130,11 @@ const data = computed(() => props.propsData)
 const title = computed(() => titleHtml(data.value.title || ''))
 const items = computed(() => props.products.slice(0, data.value.limit || 3))
 const active = ref<ProductRecord | null>(null)
-const defaultCardLabel = computed(() =>
-  data.value.cardLabel || (props.locale === 'en' ? 'Explore product' : '了解产品')
+const cardButtonLabel = computed(() =>
+  props.locale === 'en' ? 'Explore product' : '了解产品'
+)
+const modalCtaLabel = computed(() =>
+  props.locale === 'en' ? 'Book a demo' : '预约演示'
 )
 
 const customCards = computed<ProductCardItem[]>(() =>

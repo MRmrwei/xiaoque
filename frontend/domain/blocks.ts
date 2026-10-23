@@ -113,7 +113,6 @@ export interface ProductCardItem {
   summary: string
   /** 每行一个要点 */
   bullets: string
-  linkLabel: string
   href: string
 }
 
@@ -126,9 +125,6 @@ export interface ProductsProps {
   moreHref: string
   /** 自定义卡片；为空时自动读取已发布产品。 */
   items?: ProductCardItem[]
-  cardLabel?: string
-  modalCtaLabel?: string
-  modalCtaHref?: string
 }
 
 export interface NewsCardItem {

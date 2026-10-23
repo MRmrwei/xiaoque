@@ -423,11 +423,8 @@ export const blockSchemas: Record<BlockType, BlockSchema> = {
       subtitle: '按需组合，随业务生长。',
       items: [],
       limit: 3,
-      cardLabel: '了解产品',
       moreLabel: '查看全部产品',
-      moreHref: '/products',
-      modalCtaLabel: '预约演示',
-      modalCtaHref: '/contact'
+      moreHref: '/products'
     },
     fields: [
       field('eyebrow', '眉标'),
@@ -442,7 +439,6 @@ export const blockSchemas: Record<BlockType, BlockSchema> = {
           field('title', '标题'),
           field('summary', '简介', 'textarea', { rows: 2 }),
           field('bullets', '要点（每行一个）', 'textarea', { rows: 3 }),
-          field('linkLabel', '按钮文案', 'text', { help: '留空使用上方的「卡片按钮文案」。' }),
           field('href', '跳转链接', 'link')
         ]
       }),
@@ -451,11 +447,8 @@ export const blockSchemas: Record<BlockType, BlockSchema> = {
         max: 6,
         help: '自动读取和自定义卡片都按此数量显示，取排序后的前 N 条。'
       }),
-      field('cardLabel', '卡片按钮文案'),
       field('moreLabel', '更多按钮文案'),
-      field('moreHref', '更多按钮链接'),
-      field('modalCtaLabel', '详情按钮文案（自动读取时）'),
-      field('modalCtaHref', '详情按钮链接（自动读取时）')
+      field('moreHref', '更多按钮链接')
     ]
   },
 

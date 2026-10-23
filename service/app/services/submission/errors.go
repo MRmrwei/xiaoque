@@ -1,4 +1,3 @@
-// Package submission 提供后台表单留言的业务用例。
 package submission
 
 import "suki/xqyun/app/core/response"
@@ -17,8 +16,3 @@ var (
 	// ErrNotFound 表示留言不存在。
 	ErrNotFound = &Error{Code: response.CodeNotFound, Message: "留言不存在"}
 )
-
-// badRequest 构造参数错误。
-func badRequest(message string) *Error {
-	return &Error{Code: response.CodeBadRequest, Message: message}
-}

@@ -1,4 +1,4 @@
-package submission
+package impl
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	"suki/xqyun/app/dto"
 	"suki/xqyun/app/models"
+	submission "suki/xqyun/app/services/submission"
 )
 
 var (
@@ -18,24 +19,10 @@ var (
 	emailPattern   = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 )
 
-// SubmitInput 是前台提交表单的原始内容与请求信息。
-type SubmitInput struct {
-	FormKey   string
-	Locale    string
-	Name      string
-	Email     string
-	Company   string
-	Phone     string
-	Message   string
-	IP        string
-	UserAgent string
-	Now       int64
-}
-
 // Submit 校验并保存一条前台表单留言。
 func (s *Service) Submit(
 	ctx context.Context,
-	input SubmitInput,
+	input submission.SubmitInput,
 ) (dto.FrontendSubmissionResult, error) {
 	formKey := strings.ToLower(strings.TrimSpace(input.FormKey))
 	if !formKeyPattern.MatchString(formKey) {
@@ -108,7 +95,7 @@ func (s *Service) Submit(
 		Company:   nullable(company),
 		Message:   nullable(message),
 		Data:      data,
-		Status:    StatusNew,
+		Status:    submission.StatusNew,
 		IP:        nullable(input.IP),
 		UserAgent: nullable(truncate(input.UserAgent, 500)),
 		CreatedAt: now,

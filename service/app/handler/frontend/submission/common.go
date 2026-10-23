@@ -7,15 +7,16 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 
-	"suki/xqyun/app/core/application"
 	"suki/xqyun/app/core/response"
-	submissionrepository "suki/xqyun/app/repository/submission"
 	submissionservice "suki/xqyun/app/services/submission"
+	"suki/xqyun/app/core/application"
+	submissionrepository "suki/xqyun/app/repository/submission"
+	submissionimpl "suki/xqyun/app/services/submission/impl"
 )
 
-// newService 按请求组装表单留言用例服务。
-func newService(app application.Application) *submissionservice.Service {
-	return submissionservice.New(submissionrepository.New(app.DB()))
+// newService 按请求组装表单留言用例。
+func newService(app application.Application) *submissionimpl.Service {
+	return submissionimpl.New(submissionrepository.New(app.DB()))
 }
 
 // fail 把用例错误转换为统一响应；未知错误返回 500 并记录日志。

@@ -211,14 +211,6 @@
           <span class="prop-help">最终地址：{{ createPreviewPath }}</span>
         </div>
 
-        <div class="prop-field">
-          <span class="prop-label">初始内容</span>
-          <el-radio-group v-model="createForm.template">
-            <el-radio-button value="blank">空白页（含首屏）</el-radio-button>
-            <el-radio-button value="home">复制首页结构</el-radio-button>
-          </el-radio-group>
-        </div>
-
         <p v-if="createIssue" class="create-issue">{{ createIssue }}</p>
       </div>
 
@@ -419,12 +411,10 @@ const createForm = reactive<{
   name: string
   path: string
   locale: Locale
-  template: 'blank' | 'home'
 }>({
   name: '',
   path: '',
-  locale: 'zh',
-  template: 'blank'
+  locale: 'zh'
 })
 
 const createPath = computed(() => normalizePath(createForm.path))
@@ -448,7 +438,6 @@ function openCreate() {
   createForm.name = ''
   createForm.path = ''
   createForm.locale = 'zh'
-  createForm.template = 'blank'
   createOpen.value = true
 }
 
@@ -458,8 +447,7 @@ async function submitCreate() {
     const page = await pagesStore.createPage({
       name: createForm.name.trim(),
       path: createPath.value,
-      locale: createForm.locale,
-      template: createForm.template
+      locale: createForm.locale
     })
     createOpen.value = false
     ElMessage.success(`已创建「${page.name}」`)

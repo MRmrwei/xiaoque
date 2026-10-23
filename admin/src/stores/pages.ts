@@ -256,22 +256,14 @@ export const usePagesStore = defineStore('pages', () => {
     name: string
     path: string
     locale: Locale
-    template?: 'blank' | 'home'
   }): Promise<PageRecord> {
-    let copyFromId = ''
-    if (input.template === 'home') {
-      copyFromId = getByPath(input.locale, '/')?.id ?? ''
-    }
-
-    const hero = copyFromId ? null : createBlock('hero')
-    const blocks = hero ? [hero] : []
+    const hero = createBlock('hero')
     const draft = await createPageApi({
       locale: toApiLocale(input.locale),
       path: normalizePath(input.path),
       name: input.name,
       seo: { title: input.name, description: '', keywords: [] },
-      blocks: pageBlocksToApi(blocks),
-      ...(copyFromId ? { copy_from_id: copyFromId } : {})
+      blocks: pageBlocksToApi(hero ? [hero] : [])
     })
 
     const page = pageFromApi(draft)

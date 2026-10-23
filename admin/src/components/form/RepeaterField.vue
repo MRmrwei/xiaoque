@@ -95,12 +95,22 @@ function toggle(index: number) {
   openIndexes.value = next
 }
 
+// 折叠时优先显示「标题」字段；标题为空再回退到第一个有内容的文本字段
+// （新闻 / 产品 / 案例卡片的第一项是「分类」「角标」之类的短标签，不适合当标题）。
+function textValue(itemField: BlockField, item: Record<string, unknown>): string {
+  if (itemField.type !== 'text' && itemField.type !== 'textarea') return ''
+  const value = item[itemField.key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 function summary(item: Record<string, unknown>): string {
-  for (const itemField of props.field.itemFields ?? []) {
-    if (itemField.type === 'text' || itemField.type === 'textarea') {
-      const value = item[itemField.key]
-      if (typeof value === 'string' && value.trim()) return value
-    }
+  const fields = props.field.itemFields ?? []
+  const titleField = fields.find((itemField) => itemField.key === 'title')
+  const title = titleField ? textValue(titleField, item) : ''
+  if (title) return title
+  for (const itemField of fields) {
+    const value = textValue(itemField, item)
+    if (value) return value
   }
   return props.field.itemLabel || '条目'
 }

@@ -524,7 +524,7 @@ type AdminUser struct {
 
 行为：
 
-- 已实现：控制器在 `app/handler/frontend/submission`，用例在 `app/services/submission.Submit`。
+- 已实现：控制器在 `app/handler/frontend/submission`；用例接口在 `app/services/submission`（`Submitter`），默认实现在 `app/services/submission/impl`，由 handler 包内的 `newService` 按请求装配。
 - 服务端校验必填项（称呼 / 联系电话 / 留言）、邮箱格式与各字段长度；邮箱为空时不校验。
 - 落库 `xqyun_form_submissions`，`status = new`，`data` 保存完整表单内容，同时记录提交 IP 与 User-Agent。
 - 暂未实现同一 IP 频率限制；后续可补，并可触发邮件 / webhook 通知。
@@ -729,7 +729,7 @@ type AdminUser struct {
 | DELETE | `/api/v1/admin/media?ids=1,2,3` | 批量软删除素材 |
 
 修改多语言 alt 尚未实现。`kind` 作为分类字段保留，后续可扩展其他类型。
-删除为软删除：数据库记录标记 `deleted_at`，物理文件保留，已引用该 URL 的页面不会失效。
+删除会先同步删除物理文件，再把数据库记录标记 `deleted_at`；已引用该 URL 的页面将无法再显示该素材，后台删除确认框有提示。
 
 上传 / 列表响应字段：
 
@@ -750,12 +750,14 @@ type AdminUser struct {
 
 - 视频支持 MP4 / WebM / OGV / OGG / MOV / M4V，单文件默认最大 200MB（`upload.max_video_mb`）。
 - 图片支持 JPG / PNG / WebP / GIF / AVIF，单张默认最大 10MB（`upload.max_image_mb`）；暂不接收 SVG。
-- 上传逻辑抽象为 `services/media.Service`（`Uploader` + `Lister` + `Manager`），默认实现位于 `services/media/impl`；控制器只依赖接口，统一在 `handler/backend/media.newService` 装配。更换上传逻辑（转码、病毒扫描、云存储直传等）时新增一个实现并替换装配处即可。
+- 只有上传文件与落库两种逻辑保留接口：`media.FileUploader`（上传文件）与 `media.Uploader`（上传并落库），默认实现在 `services/media/impl`；列表 / 详情 / 重命名 / 删除是直接业务逻辑，不抽接口，由 `impl.Service` 直接提供。更换上传逻辑（转码、病毒扫描、云存储直传等）时新增一个 `FileUploader` 实现并替换装配处即可。
+- 分层为：接口 `services/media`、实现 `services/media/impl`、消费者 `handler/backend/media`。装配放在 `handler/backend/media/common.go` 的 `newService`（handler 包里唯一 import 实现的位置）；控制器不保存 service 字段，在每个处理方法内调用 `newService` 创建用例。上传解析仍在 `handler/backend/media/upload.go`，HTTP 路径与响应不变。
+- 上传与落库分开：`media.FileUploader` 只做校验并写入存储（依赖 `repository/media.Storage` 与 `media.Limits`，不访问数据库），`newService` 里直接 `NewFileUploader(storage, limits)` 并嵌入 `impl.Service`；`Service.Upload` 调用嵌入的上传能力、拿到文件信息后写素材记录（落库失败删除已写入的文件）。前台以后只需要上传文件、不需要素材库记录时，自己用 `mediaimpl.NewFileUploader` 装配（Storage + Limits）即可；需要不同规则（游客限流、转码、对象存储直传等）时替换 `media.FileUploader` 实现即可。
 - 存储实现由 `upload.provider` 决定，当前仅 `local`；`repository/media.Storage` 是存储接口，后续可增加 OSS / COS / S3 实现，业务层不变。
 - 本地实现保存到 `upload.dir`（默认 `uploads`），按 `yyyy/mm` 分目录，静态访问路径为 `upload.url_prefix`（默认 `/uploads`），支持 Range。
 - 响应中的 `url` 由 `upload.public_base_url` 拼接完整地址；生产环境填官网域名 / CDN。
 - 页面里的图片统一从「内置图形 / 图片素材库」选择，页面区块只保存素材 URL；富文本插图也先上传素材库再插入 URL。
-- 删除为软删除（只标记 `deleted_at`，物理文件保留）；当前未检查页面引用。
+- 删除会同步删除物理文件并软删除记录；文件删除失败时不删记录，可直接重试（不存在的文件视为删除成功）。当前未检查页面引用，后台确认框提示引用页面会失效。
 
 ### 4.5 菜单与站点设置
 

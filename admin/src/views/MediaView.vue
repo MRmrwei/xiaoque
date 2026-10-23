@@ -272,7 +272,7 @@ async function batchRemove() {
 
   try {
     await ElMessageBox.confirm(
-      `确定删除选中的 ${selectedIds.value.length} 个素材吗？已引用这些素材的页面不会受影响，但素材库中将不再显示。`,
+      `确定删除选中的 ${selectedIds.value.length} 个素材吗？服务器上的素材文件会一并删除，已引用这些素材的页面将无法正常显示。`,
       '批量删除素材',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
     )
@@ -323,7 +323,7 @@ async function rename(item: ApiMediaItem) {
 async function remove(item: ApiMediaItem) {
   try {
     await ElMessageBox.confirm(
-      `确定删除「${item.original_name}」吗？已引用该素材的页面不会受影响，但素材库中将不再显示。`,
+      `确定删除「${item.original_name}」吗？服务器上的素材文件会一并删除，已引用该素材的页面将无法正常显示。`,
       '删除素材',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
     )

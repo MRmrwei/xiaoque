@@ -36,6 +36,31 @@ var (
 	ErrMediaNotFound = errors.New("素材不存在")
 )
 
+// StoredFile 是已写入存储的文件信息，不包含数据库记录。
+type StoredFile struct {
+	Kind         string
+	OriginalName string
+	Filename     string
+	URL          string
+	Mime         string
+	Size         int64
+	CreatedAt    int64
+}
+
+// FileUploader 是纯上传能力：校验并写入存储，不落库。
+// 落库（写素材记录）由 Service 负责，两者可以分开装配。
+type FileUploader interface {
+	Upload(ctx context.Context, input UploadInput) (StoredFile, error)
+	// Remove 删除已写入的文件，用于落库失败时回滚。
+	Remove(filename string) error
+}
+
+// Limits 是上传文件的大小上限（字节）。
+type Limits struct {
+	MaxVideoBytes int64
+	MaxImageBytes int64
+}
+
 // UploadInput 是上传素材入参；文件内容由 handler 从 multipart 中读出后传入。
 type UploadInput struct {
 	Kind         string
@@ -45,8 +70,8 @@ type UploadInput struct {
 	Reader       io.Reader
 }
 
-// Uploader 是上传素材的统一入口。
-// 不同上传逻辑（本地处理、转码、对象存储直传等）提供不同实现即可。
+// Uploader 是「上传并落库」的完整入口：写入存储后还要写一条素材记录。
+// 只需要文件上传、不需要素材库记录的场景请用 FileUploader。
 type Uploader interface {
 	Upload(ctx context.Context, input UploadInput, operatorID *uint64) (*models.Media, error)
 }
@@ -64,22 +89,5 @@ type UpdateInput struct {
 	OriginalName string
 }
 
-// Lister 是素材列表查询能力。
-type Lister interface {
-	List(ctx context.Context, input ListInput) ([]models.Media, int64, error)
-}
-
-// Manager 是素材详情、修改与删除能力。
-type Manager interface {
-	Detail(ctx context.Context, id uint64) (*models.Media, error)
-	Update(ctx context.Context, id uint64, input UpdateInput) (*models.Media, error)
-	Delete(ctx context.Context, id uint64) error
-	DeleteMany(ctx context.Context, ids []uint64) error
-}
-
-// Service 是控制器使用的素材用例集合。
-type Service interface {
-	Uploader
-	Lister
-	Manager
-}
+// 列表、详情、重命名与删除属于直接业务逻辑，不抽接口：
+// 需要时由 impl.Service 直接提供，控制器调用具体实现即可。

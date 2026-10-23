@@ -19,9 +19,8 @@ import (
 	"suki/xqyun/middleware"
 )
 
-// newService 是素材上传的唯一装配入口：控制器只依赖 media.Service 接口。
-// 存储实现由 upload.provider 决定；更换上传逻辑时在这里替换 mediaimpl。
-func newService(app application.Application) (mediaservice.Service, error) {
+// newService 装配素材用例：先 NewFileUploader 创建上传能力，再嵌入 Service 并补上素材记录。
+func newService(app application.Application) (*mediaimpl.Service, error) {
 	cfg := app.Upload()
 	storage, err := mediarepository.NewStorage(
 		cfg.Provider,
@@ -32,12 +31,11 @@ func newService(app application.Application) (mediaservice.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mediaimpl.New(
-		mediarepository.New(app.DB()),
-		storage,
-		cfg.MaxVideoBytes,
-		cfg.MaxImageBytes,
-	), nil
+	uploader := mediaimpl.NewFileUploader(storage, mediaservice.Limits{
+		MaxVideoBytes: cfg.MaxVideoBytes,
+		MaxImageBytes: cfg.MaxImageBytes,
+	})
+	return mediaimpl.New(mediarepository.New(app.DB()), uploader), nil
 }
 
 // currentUserID 从 Access Token claims 读取当前管理员 ID。

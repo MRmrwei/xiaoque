@@ -1,50 +1,48 @@
 <template>
-  <div class="pv-chrome">
-    <div v-if="showAnnouncement" class="pv-announcement">
-      <div class="container pv-announcement-inner">
-        <p class="pv-announcement-text">
-          <span class="pv-announcement-dot" />
-          <span>{{ announcement.text[locale] }}</span>
-          <span class="pv-announcement-sep">—</span>
-          <em>{{ announcement.highlight[locale] }}</em>
-        </p>
-        <span class="pv-announcement-link" :title="announcement.linkHref">
-          {{ announcement.linkLabel[locale] }} ↗
+  <div v-if="showAnnouncement" class="pv-announcement">
+    <div class="container pv-announcement-inner">
+      <p class="pv-announcement-text">
+        <span class="pv-announcement-dot" />
+        <span>{{ announcement.text[locale] }}</span>
+        <span class="pv-announcement-sep">—</span>
+        <em>{{ announcement.highlight[locale] }}</em>
+      </p>
+      <span class="pv-announcement-link" :title="announcement.linkHref">
+        {{ announcement.linkLabel[locale] }} ↗
+      </span>
+    </div>
+  </div>
+
+  <header class="pv-header" :class="{ 'pv-header--static': !sticky }">
+    <div class="container pv-header-inner">
+      <div class="pv-brand">
+        <BrandMark :size="28" :image="settings.brand.logo" />
+        <span class="pv-brand-text">
+          <strong>{{ settings.siteName[locale] }}</strong>
+          <span>{{ settings.siteName.en }}</span>
+        </span>
+      </div>
+      <nav class="pv-nav">
+        <span v-for="item in navItems" :key="item.key" :title="item.path">
+          {{ item[locale] }}
+        </span>
+      </nav>
+      <div class="pv-actions">
+        <span v-if="showLanguage" class="pv-lang">
+          <b>{{ locale === 'en' ? 'EN' : '中' }}</b><i>|</i>{{ locale === 'en' ? '中' : 'EN' }}
+        </span>
+        <span
+          v-for="cta in visibleCtas"
+          :key="cta.key"
+          class="pv-cta"
+          :class="`pv-cta--${cta.variant}`"
+          :title="cta.href"
+        >
+          {{ cta.label[locale] }}
         </span>
       </div>
     </div>
-
-    <header class="pv-header" :class="{ 'pv-header--static': !sticky }">
-      <div class="container pv-header-inner">
-        <div class="pv-brand">
-          <BrandMark :size="28" :image="settings.brand.logo" />
-          <span class="pv-brand-text">
-            <strong>{{ settings.siteName[locale] }}</strong>
-            <span>{{ settings.siteName.en }}</span>
-          </span>
-        </div>
-        <nav class="pv-nav">
-          <span v-for="item in navItems" :key="item.key" :title="item.path">
-            {{ item[locale] }}
-          </span>
-        </nav>
-        <div class="pv-actions">
-          <span v-if="showLanguage" class="pv-lang">
-            <b>{{ locale === 'en' ? 'EN' : '中' }}</b><i>|</i>{{ locale === 'en' ? '中' : 'EN' }}
-          </span>
-          <span
-            v-for="cta in visibleCtas"
-            :key="cta.key"
-            class="pv-cta"
-            :class="`pv-cta--${cta.variant}`"
-            :title="cta.href"
-          >
-            {{ cta.label[locale] }}
-          </span>
-        </div>
-      </div>
-    </header>
-  </div>
+  </header>
 </template>
 
 <script setup lang="ts">

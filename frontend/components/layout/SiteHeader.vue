@@ -1,117 +1,115 @@
 <template>
-  <div class="site-top">
-    <div v-if="settings.header.showAnnouncement && announcementVisible" class="announcement">
-      <div class="container announcement-inner">
-        <p class="announcement-text">
-          <span class="pulse-dot" />
-          <span>{{ announcement.text[locale] }}</span>
-          <span class="announcement-sep">—</span>
-          <em>{{ announcement.highlight[locale] }}</em>
-        </p>
-        <BlockLink
-          v-if="announcement.linkLabel[locale]"
-          :href="announcement.linkHref"
-          class="announcement-link"
+  <div v-if="settings.header.showAnnouncement && announcementVisible" class="announcement">
+    <div class="container announcement-inner">
+      <p class="announcement-text">
+        <span class="pulse-dot" />
+        <span>{{ announcement.text[locale] }}</span>
+        <span class="announcement-sep">—</span>
+        <em>{{ announcement.highlight[locale] }}</em>
+      </p>
+      <BlockLink
+        v-if="announcement.linkLabel[locale]"
+        :href="announcement.linkHref"
+        class="announcement-link"
+      >
+        {{ announcement.linkLabel[locale] }} <UiIcon name="arrow-up-right" :size="13" />
+      </BlockLink>
+      <button class="announcement-close" :aria-label="t('nav.close')" @click="announcementVisible = false">
+        <UiIcon name="close" :size="14" />
+      </button>
+    </div>
+  </div>
+
+  <header
+    class="site-header"
+    :class="{
+      'is-scrolled': scrolled,
+      'menu-open': menuOpen,
+      'is-static': !settings.header.sticky
+    }"
+  >
+    <div class="container header-inner">
+      <NuxtLink :to="localePath('/')" class="brand" @click="menuOpen = false">
+        <BrandMark :size="34" :image="settings.brand.logo" />
+        <span class="brand-text">
+          <span class="brand-name">{{ siteName }}</span>
+          <span class="brand-sub">{{ settings.siteName.en }}</span>
+        </span>
+      </NuxtLink>
+
+      <nav class="desktop-nav" :aria-label="t('nav.menu')">
+        <NuxtLink
+          v-for="item in nav"
+          :key="item.path"
+          :to="localePath(item.path)"
+          class="nav-link"
+          :class="{ active: isActive(item.path) }"
         >
-          {{ announcement.linkLabel[locale] }} <UiIcon name="arrow-up-right" :size="13" />
+          {{ item.label }}
+        </NuxtLink>
+      </nav>
+
+      <div class="header-actions">
+        <div v-if="settings.header.showLanguage" class="lang-switch" role="group" aria-label="Language">
+          <button :class="{ active: locale === 'zh' }" @click="switchTo('zh')">中</button>
+          <button :class="{ active: locale === 'en' }" @click="switchTo('en')">EN</button>
+        </div>
+        <BlockLink
+          v-for="cta in visibleCtas"
+          :key="cta.key"
+          :href="cta.href"
+          class="header-cta"
+          :class="[`header-cta--${cta.variant}`, ctaClass(cta.variant)]"
+        >
+          {{ cta.label[locale] }}
+          <span v-if="cta.variant === 'primary'" class="arr">↗</span>
         </BlockLink>
-        <button class="announcement-close" :aria-label="t('nav.close')" @click="announcementVisible = false">
-          <UiIcon name="close" :size="14" />
+        <button
+          class="mobile-toggle"
+          :aria-expanded="menuOpen"
+          :aria-label="menuOpen ? t('nav.close') : t('nav.menu')"
+          @click="menuOpen = !menuOpen"
+        >
+          <UiIcon :name="menuOpen ? 'close' : 'menu'" :size="22" />
         </button>
       </div>
     </div>
 
-    <header
-      class="site-header"
-      :class="{
-        'is-scrolled': scrolled,
-        'menu-open': menuOpen,
-        'is-static': !settings.header.sticky
-      }"
-    >
-      <div class="container header-inner">
-        <NuxtLink :to="localePath('/')" class="brand" @click="menuOpen = false">
-          <BrandMark :size="34" :image="settings.brand.logo" />
-          <span class="brand-text">
-            <span class="brand-name">{{ siteName }}</span>
-            <span class="brand-sub">{{ settings.siteName.en }}</span>
-          </span>
-        </NuxtLink>
-
-        <nav class="desktop-nav" :aria-label="t('nav.menu')">
-          <NuxtLink
-            v-for="item in nav"
-            :key="item.path"
-            :to="localePath(item.path)"
-            class="nav-link"
-            :class="{ active: isActive(item.path) }"
-          >
-            {{ item.label }}
-          </NuxtLink>
-        </nav>
-
-        <div class="header-actions">
-          <div v-if="settings.header.showLanguage" class="lang-switch" role="group" aria-label="Language">
-            <button :class="{ active: locale === 'zh' }" @click="switchTo('zh')">中</button>
-            <button :class="{ active: locale === 'en' }" @click="switchTo('en')">EN</button>
+    <transition name="drop">
+      <div v-if="menuOpen" class="mobile-menu">
+        <div class="container mobile-menu-inner">
+          <nav class="mobile-nav">
+            <NuxtLink
+              v-for="(item, index) in nav"
+              :key="item.path"
+              :to="localePath(item.path)"
+              class="mobile-nav-link"
+              :class="{ active: isActive(item.path) }"
+              @click="menuOpen = false"
+            >
+              <span class="mobile-index">0{{ index + 1 }}</span>
+              {{ item.label }}
+              <UiIcon name="arrow-up-right" :size="17" />
+            </NuxtLink>
+          </nav>
+          <div class="mobile-menu-foot">
+            <div v-if="settings.header.showLanguage" class="mobile-lang">
+              <button :class="{ active: locale === 'zh' }" @click="switchTo('zh')">{{ t('lang.zh') }}</button>
+              <button :class="{ active: locale === 'en' }" @click="switchTo('en')">{{ t('lang.en') }}</button>
+            </div>
+            <BlockLink
+              v-if="primaryCta"
+              :href="primaryCta.href"
+              class="btn btn--primary"
+              @click="menuOpen = false"
+            >
+              {{ primaryCta.label[locale] }} <span class="arr">↗</span>
+            </BlockLink>
           </div>
-          <BlockLink
-            v-for="cta in visibleCtas"
-            :key="cta.key"
-            :href="cta.href"
-            class="header-cta"
-            :class="[`header-cta--${cta.variant}`, ctaClass(cta.variant)]"
-          >
-            {{ cta.label[locale] }}
-            <span v-if="cta.variant === 'primary'" class="arr">↗</span>
-          </BlockLink>
-          <button
-            class="mobile-toggle"
-            :aria-expanded="menuOpen"
-            :aria-label="menuOpen ? t('nav.close') : t('nav.menu')"
-            @click="menuOpen = !menuOpen"
-          >
-            <UiIcon :name="menuOpen ? 'close' : 'menu'" :size="22" />
-          </button>
         </div>
       </div>
-
-      <transition name="drop">
-        <div v-if="menuOpen" class="mobile-menu">
-          <div class="container mobile-menu-inner">
-            <nav class="mobile-nav">
-              <NuxtLink
-                v-for="(item, index) in nav"
-                :key="item.path"
-                :to="localePath(item.path)"
-                class="mobile-nav-link"
-                :class="{ active: isActive(item.path) }"
-                @click="menuOpen = false"
-              >
-                <span class="mobile-index">0{{ index + 1 }}</span>
-                {{ item.label }}
-                <UiIcon name="arrow-up-right" :size="17" />
-              </NuxtLink>
-            </nav>
-            <div class="mobile-menu-foot">
-              <div v-if="settings.header.showLanguage" class="mobile-lang">
-                <button :class="{ active: locale === 'zh' }" @click="switchTo('zh')">{{ t('lang.zh') }}</button>
-                <button :class="{ active: locale === 'en' }" @click="switchTo('en')">{{ t('lang.en') }}</button>
-              </div>
-              <BlockLink
-                v-if="primaryCta"
-                :href="primaryCta.href"
-                class="btn btn--primary"
-                @click="menuOpen = false"
-              >
-                {{ primaryCta.label[locale] }} <span class="arr">↗</span>
-              </BlockLink>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </header>
-  </div>
+    </transition>
+  </header>
 </template>
 
 <script setup lang="ts">
@@ -188,11 +186,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.site-top {
-  position: relative;
-  z-index: 100;
-}
-
 .announcement {
   background: var(--ink);
   color: rgba(246, 242, 234, 0.82);
@@ -270,9 +263,12 @@ onBeforeUnmount(() => {
   background: rgba(246, 242, 234, 0.1);
 }
 
+/* 吸顶依赖 header 的包含块是整页高度的 .site-shell；
+   不要再套一层高度等于头部的包装元素，否则 sticky 没有可滚动空间。 */
 .site-header {
   position: sticky;
   top: 0;
+  z-index: 100;
   background: color-mix(in srgb, var(--paper) 82%, transparent);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
